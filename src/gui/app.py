@@ -8,6 +8,8 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from src.db.database import obter_conexao
 from src.db.repository import listar_historico
 from src.main import processar_lote
+from src.models.dae_models import NotaConciliada
+from src.reports.report_generator import gerar_relatorio_conciliadas_pdf
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -23,6 +25,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         self.caminhos_dae: list[str] = []
         self.caminho_relatorio: str | None = None
+        self.ultima_conciliacao: list[NotaConciliada] = []
 
         self._montar_layout()
         self._atualizar_historico()
@@ -51,8 +54,16 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.barra_progresso = ctk.CTkProgressBar(self, mode="indeterminate")
         self.barra_progresso.pack(fill="x", padx=16, pady=8)
 
-        self.botao_processar = ctk.CTkButton(self, text="Processar", command=self._processar)
-        self.botao_processar.pack(padx=16, pady=(0, 8), anchor="w")
+        frame_acoes = ctk.CTkFrame(self, fg_color="transparent")
+        frame_acoes.pack(fill="x", padx=16, pady=(0, 8))
+
+        self.botao_processar = ctk.CTkButton(frame_acoes, text="Processar", command=self._processar)
+        self.botao_processar.pack(side="left")
+
+        self.botao_gerar_pdf = ctk.CTkButton(
+            frame_acoes, text="Gerar Relatório PDF", command=self._gerar_pdf, state="disabled"
+        )
+        self.botao_gerar_pdf.pack(side="left", padx=(8, 0))
 
         frame_historico = ctk.CTkFrame(self)
         frame_historico.pack(fill="both", expand=True, padx=16, pady=(8, 16))
@@ -104,25 +115,52 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
     def _processar_em_background(self) -> None:
         try:
-            caminho_conciliadas, caminho_nao_encontradas = processar_lote(
-                self.caminhos_dae, self.caminho_relatorio
-            )
-            self.after(0, self._processar_concluido, caminho_conciliadas, caminho_nao_encontradas, None)
+            resultado = processar_lote(self.caminhos_dae, self.caminho_relatorio)
+            self.after(0, self._processar_concluido, resultado, None)
         except Exception as erro:
-            self.after(0, self._processar_concluido, None, None, erro)
+            self.after(0, self._processar_concluido, None, erro)
 
-    def _processar_concluido(self, caminho_conciliadas: Path | None, caminho_nao_encontradas: Path | None, erro: Exception | None) -> None:
+    def _processar_concluido(
+        self, resultado: tuple[Path, Path, list[NotaConciliada]] | None, erro: Exception | None
+    ) -> None:
         self.barra_progresso.stop()
         self.botao_processar.configure(state="normal")
         if erro is not None:
             messagebox.showerror("AuditaDAE", f"Falha ao processar: {erro}")
             return
+
+        caminho_conciliadas, caminho_nao_encontradas, conciliadas = resultado
+        self.ultima_conciliacao = conciliadas
+        self.botao_gerar_pdf.configure(state="normal")
+
         messagebox.showinfo(
             "AuditaDAE",
             f"Processamento concluído.\n\nRelatório de conciliadas: {caminho_conciliadas}\n"
             f"Relatório de não encontradas: {caminho_nao_encontradas}",
         )
         self._atualizar_historico()
+
+    def _gerar_pdf(self) -> None:
+        if not self.ultima_conciliacao:
+            messagebox.showwarning("AuditaDAE", "Nenhuma nota conciliada para incluir no PDF.")
+            return
+
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar Relatório PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile="relatorio_conciliadas.pdf",
+        )
+        if not caminho:
+            return
+
+        try:
+            gerar_relatorio_conciliadas_pdf(self.ultima_conciliacao, Path(caminho))
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar PDF: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório PDF gerado em:\n{caminho}")
 
     def _atualizar_historico(self) -> None:
         conexao = obter_conexao()
