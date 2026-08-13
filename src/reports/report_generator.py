@@ -7,7 +7,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from src.models.dae_models import NotaConciliada, NotaNaoEncontrada
+from src.models.dae_models import DaePagamentoNaoLocalizado, NotaConciliada, NotaNaoEncontrada, PagamentoConfirmado
 
 COLUNAS_CONCILIADAS = [
     "Número da NF",
@@ -22,6 +22,23 @@ COLUNAS_NAO_ENCONTRADAS = [
     "Número da NF",
     "Data de Emissão",
     "CNPJ do Emitente",
+    "Status",
+]
+
+COLUNAS_PAGAMENTOS_CONFIRMADOS = [
+    "Nosso Número",
+    "Pagamento",
+    "Referência",
+    "Receita",
+    "Val. Principal",
+    "Val. Total",
+]
+
+COLUNAS_PAGAMENTOS_NAO_LOCALIZADOS = [
+    "Arquivo de Origem",
+    "Código da Receita",
+    "Referência",
+    "Valor Principal (R$)",
     "Status",
 ]
 
@@ -152,6 +169,106 @@ def gerar_relatorio_nao_encontradas(nao_encontradas: list[NotaNaoEncontrada], ca
         for nota in nao_encontradas
     ]
     _gerar_planilha(caminho, COLUNAS_NAO_ENCONTRADAS, linhas)
+    return caminho
+
+
+def gerar_relatorio_pagamentos_confirmados(confirmados: list[PagamentoConfirmado], caminho: Path) -> Path:
+    linhas = [
+        [
+            confirmado.linha_pagamento.nosso_numero,
+            confirmado.linha_pagamento.data_pagamento,
+            confirmado.linha_pagamento.referencia_bruta,
+            f"{confirmado.linha_pagamento.codigo_receita or ''} - {confirmado.linha_pagamento.descricao_receita or ''}",
+            confirmado.linha_pagamento.valor_principal,
+            confirmado.linha_pagamento.valor_total,
+        ]
+        for confirmado in confirmados
+    ]
+    _gerar_planilha(caminho, COLUNAS_PAGAMENTOS_CONFIRMADOS, linhas)
+    return caminho
+
+
+def gerar_relatorio_pagamentos_nao_localizados(nao_localizados: list[DaePagamentoNaoLocalizado], caminho: Path) -> Path:
+    linhas = [
+        [
+            nao_localizado.arquivo_origem,
+            nao_localizado.codigo_receita,
+            nao_localizado.referencia,
+            nao_localizado.valor_principal,
+            nao_localizado.status,
+        ]
+        for nao_localizado in nao_localizados
+    ]
+    _gerar_planilha(caminho, COLUNAS_PAGAMENTOS_NAO_LOCALIZADOS, linhas)
+    return caminho
+
+
+def _tabela_pagamentos(dados: list[list], cor_cabecalho: str) -> Table:
+    tabela = Table(dados, repeatRows=1)
+    tabela.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(cor_cabecalho)),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    return tabela
+
+
+def gerar_relatorio_pagamentos_pdf(
+    confirmados: list[PagamentoConfirmado],
+    nao_localizados: list[DaePagamentoNaoLocalizado],
+    caminho: Path,
+) -> Path:
+    documento = SimpleDocTemplate(
+        str(caminho),
+        pagesize=landscape(A4),
+        title="AuditaDAE - Relatorio de Pagamentos",
+    )
+    estilos = getSampleStyleSheet()
+    elementos = [
+        Paragraph("AuditaDAE — Relatório de Pagamentos", estilos["Title"]),
+        Paragraph(f"Gerado em {datetime.now():%d/%m/%Y %H:%M}", estilos["Normal"]),
+        Spacer(1, 12),
+    ]
+
+    elementos.append(Paragraph("Pagamentos Confirmados", estilos["Heading2"]))
+    dados_confirmados = [COLUNAS_PAGAMENTOS_CONFIRMADOS] + [
+        [
+            confirmado.linha_pagamento.nosso_numero,
+            confirmado.linha_pagamento.data_pagamento or "",
+            confirmado.linha_pagamento.referencia_bruta or "",
+            f"{confirmado.linha_pagamento.codigo_receita or ''} - {confirmado.linha_pagamento.descricao_receita or ''}",
+            f"{confirmado.linha_pagamento.valor_principal:.2f}" if confirmado.linha_pagamento.valor_principal is not None else "",
+            f"{confirmado.linha_pagamento.valor_total:.2f}" if confirmado.linha_pagamento.valor_total is not None else "",
+        ]
+        for confirmado in confirmados
+    ]
+    elementos.append(_tabela_pagamentos(dados_confirmados, "#1f6f43"))
+    elementos.append(Spacer(1, 20))
+
+    elementos.append(Paragraph("Não Localizados no Relatório de Pagamentos", estilos["Heading2"]))
+    dados_nao_localizados = [COLUNAS_PAGAMENTOS_NAO_LOCALIZADOS] + [
+        [
+            nao_localizado.arquivo_origem,
+            nao_localizado.codigo_receita or "",
+            nao_localizado.referencia or "",
+            f"{nao_localizado.valor_principal:.2f}" if nao_localizado.valor_principal is not None else "",
+            nao_localizado.status,
+        ]
+        for nao_localizado in nao_localizados
+    ]
+    elementos.append(_tabela_pagamentos(dados_nao_localizados, "#8f1f1f"))
+
+    documento.build(elementos)
     return caminho
 
 

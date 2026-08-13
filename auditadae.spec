@@ -1,16 +1,27 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_data_files
 
 datas = []
 datas += collect_data_files("customtkinter")
 datas += collect_data_files("tkinterdnd2")
 
+# Pacote minimo do Tesseract (tesseract.exe + DLLs + tessdata/por.traineddata),
+# preparado por build.bat em vendor/tesseract/ antes de invocar o PyInstaller.
+# Fica em uma subpasta "tesseract/" ao lado do AuditaDAE.exe no onedir final;
+# ver src/ocr/tesseract_setup.py para a resolucao do caminho em tempo de execucao.
+vendor_tesseract = Path("vendor/tesseract")
+binaries = [(str(p), "tesseract") for p in vendor_tesseract.glob("*.exe")]
+binaries += [(str(p), "tesseract") for p in vendor_tesseract.glob("*.dll")]
+datas += [(str(p), "tesseract/tessdata") for p in (vendor_tesseract / "tessdata").glob("*.traineddata")]
+
 a = Analysis(
     ["run_app.py"],
     pathex=["."],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
-    hiddenimports=["pdfplumber", "openpyxl", "xlrd"],
+    hiddenimports=["pdfplumber", "openpyxl", "xlrd", "pytesseract", "fitz"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

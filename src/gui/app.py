@@ -7,11 +7,18 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from src.db.database import obter_conexao
 from src.db.repository import listar_historico
-from src.main import processar_lote
-from src.models.dae_models import NotaConciliada, NotaNaoEncontrada
+from src.main import processar_lote, verificar_pagamentos_lote
+from src.models.dae_models import (
+    DaeDocumento,
+    DaePagamentoNaoLocalizado,
+    NotaConciliada,
+    NotaNaoEncontrada,
+    PagamentoConfirmado,
+)
 from src.reports.report_generator import (
     gerar_relatorio_conciliadas_pdf,
     gerar_relatorio_nao_encontradas_pdf,
+    gerar_relatorio_pagamentos_pdf,
 )
 
 ctk.set_appearance_mode("dark")
@@ -30,6 +37,10 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.caminho_relatorio: str | None = None
         self.ultima_conciliacao: list[NotaConciliada] = []
         self.ultima_nao_encontradas: list[NotaNaoEncontrada] = []
+        self.ultimos_daes: list[DaeDocumento] = []
+        self.caminho_relatorio_pagamento: str | None = None
+        self.ultimos_pagamentos_confirmados: list[PagamentoConfirmado] = []
+        self.ultimos_pagamentos_nao_localizados: list[DaePagamentoNaoLocalizado] = []
 
         self._montar_layout()
         self._atualizar_historico()
@@ -46,7 +57,9 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         frame_relatorio = ctk.CTkFrame(self)
         frame_relatorio.pack(fill="x", padx=16, pady=8)
-        ctk.CTkLabel(frame_relatorio, text="Relatório de Notas Fiscais (xlsx/xls/csv/pdf)").pack(anchor="w", padx=8, pady=(8, 0))
+        ctk.CTkLabel(
+            frame_relatorio, text="Relatório de Notas Fiscais (xlsx/xls/csv/pdf) — opcional"
+        ).pack(anchor="w", padx=8, pady=(8, 0))
         self.label_relatorio = ctk.CTkLabel(frame_relatorio, text="Nenhum arquivo selecionado")
         self.label_relatorio.pack(fill="x", padx=8, pady=4)
         self.label_relatorio.drop_target_register(DND_FILES)
@@ -54,6 +67,19 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         ctk.CTkButton(frame_relatorio, text="Selecionar Relatório", command=self._selecionar_relatorio).pack(
             padx=8, pady=(0, 8), anchor="w"
         )
+
+        frame_relatorio_pagamento = ctk.CTkFrame(self)
+        frame_relatorio_pagamento.pack(fill="x", padx=16, pady=8)
+        ctk.CTkLabel(frame_relatorio_pagamento, text="Relatório de Pagamentos de DAE (PDF)").pack(
+            anchor="w", padx=8, pady=(8, 0)
+        )
+        self.label_relatorio_pagamento = ctk.CTkLabel(frame_relatorio_pagamento, text="Nenhum arquivo selecionado")
+        self.label_relatorio_pagamento.pack(fill="x", padx=8, pady=4)
+        ctk.CTkButton(
+            frame_relatorio_pagamento,
+            text="Selecionar Relatório de Pagamentos",
+            command=self._selecionar_relatorio_pagamento,
+        ).pack(padx=8, pady=(0, 8), anchor="w")
 
         self.barra_progresso = ctk.CTkProgressBar(self, mode="indeterminate")
         self.barra_progresso.pack(fill="x", padx=16, pady=8)
@@ -76,6 +102,22 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             state="disabled",
         )
         self.botao_gerar_pdf_nao_encontradas.pack(side="left", padx=(8, 0))
+
+        self.botao_verificar_pagamentos = ctk.CTkButton(
+            frame_acoes,
+            text="Verificar Pagamentos",
+            command=self._verificar_pagamentos,
+            state="disabled",
+        )
+        self.botao_verificar_pagamentos.pack(side="left", padx=(8, 0))
+
+        self.botao_gerar_pdf_pagamentos = ctk.CTkButton(
+            frame_acoes,
+            text="Gerar Relatório de Pagamentos em PDF",
+            command=self._gerar_pdf_pagamentos,
+            state="disabled",
+        )
+        self.botao_gerar_pdf_pagamentos.pack(side="left", padx=(8, 0))
 
         frame_historico = ctk.CTkFrame(self)
         frame_historico.pack(fill="both", expand=True, padx=16, pady=(8, 16))
@@ -113,12 +155,23 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             self.caminho_relatorio = caminho
             self.label_relatorio.configure(text=caminho)
 
+    def _selecionar_relatorio_pagamento(self) -> None:
+        caminho = filedialog.askopenfilename(
+            title="Selecionar Relatório de Pagamentos",
+            filetypes=[("PDF", "*.pdf")],
+        )
+        if caminho:
+            self.caminho_relatorio_pagamento = caminho
+            self.label_relatorio_pagamento.configure(text=caminho)
+            self._atualizar_estado_botao_pagamentos()
+
+    def _atualizar_estado_botao_pagamentos(self) -> None:
+        habilitado = bool(self.ultimos_daes) and bool(self.caminho_relatorio_pagamento)
+        self.botao_verificar_pagamentos.configure(state="normal" if habilitado else "disabled")
+
     def _processar(self) -> None:
         if not self.caminhos_dae:
             messagebox.showwarning("AuditaDAE", "Selecione ao menos um PDF de DAE.")
-            return
-        if not self.caminho_relatorio:
-            messagebox.showwarning("AuditaDAE", "Selecione o relatório de notas fiscais.")
             return
 
         self.botao_processar.configure(state="disabled")
@@ -134,7 +187,8 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
     def _processar_concluido(
         self,
-        resultado: tuple[Path, Path, list[NotaConciliada], list[NotaNaoEncontrada]] | None,
+        resultado: tuple[Path | None, Path | None, list[NotaConciliada], list[NotaNaoEncontrada], list[DaeDocumento]]
+        | None,
         erro: Exception | None,
     ) -> None:
         self.barra_progresso.stop()
@@ -143,9 +197,22 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             messagebox.showerror("AuditaDAE", f"Falha ao processar: {erro}")
             return
 
-        caminho_conciliadas, caminho_nao_encontradas, conciliadas, nao_encontradas = resultado
+        caminho_conciliadas, caminho_nao_encontradas, conciliadas, nao_encontradas, daes = resultado
         self.ultima_conciliacao = conciliadas
         self.ultima_nao_encontradas = nao_encontradas
+        self.ultimos_daes = daes
+        self._atualizar_estado_botao_pagamentos()
+
+        if caminho_conciliadas is None:
+            self.botao_gerar_pdf.configure(state="disabled")
+            self.botao_gerar_pdf_nao_encontradas.configure(state="disabled")
+            messagebox.showinfo(
+                "AuditaDAE",
+                "DAE(s) processado(s) com sucesso.\n\n"
+                "Nenhum relatório de notas fiscais foi selecionado — conciliação de notas não realizada.",
+            )
+            return
+
         self.botao_gerar_pdf.configure(state="normal")
         self.botao_gerar_pdf_nao_encontradas.configure(state="normal")
 
@@ -194,6 +261,71 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         try:
             gerar_relatorio_nao_encontradas_pdf(self.ultima_nao_encontradas, Path(caminho))
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar PDF: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório PDF gerado em:\n{caminho}")
+
+    def _verificar_pagamentos(self) -> None:
+        if not self.ultimos_daes:
+            messagebox.showwarning("AuditaDAE", "Processe ao menos um DAE antes de verificar pagamentos.")
+            return
+        if not self.caminho_relatorio_pagamento:
+            messagebox.showwarning("AuditaDAE", "Selecione o relatório de pagamentos.")
+            return
+
+        self.botao_verificar_pagamentos.configure(state="disabled")
+        self.barra_progresso.start()
+        threading.Thread(target=self._verificar_pagamentos_em_background, daemon=True).start()
+
+    def _verificar_pagamentos_em_background(self) -> None:
+        try:
+            resultado = verificar_pagamentos_lote(self.ultimos_daes, self.caminho_relatorio_pagamento)
+            self.after(0, self._verificar_pagamentos_concluido, resultado, None)
+        except Exception as erro:
+            self.after(0, self._verificar_pagamentos_concluido, None, erro)
+
+    def _verificar_pagamentos_concluido(
+        self,
+        resultado: tuple[Path, Path, list[PagamentoConfirmado], list[DaePagamentoNaoLocalizado]] | None,
+        erro: Exception | None,
+    ) -> None:
+        self.barra_progresso.stop()
+        self._atualizar_estado_botao_pagamentos()
+        if erro is not None:
+            messagebox.showerror("AuditaDAE", f"Falha ao verificar pagamentos: {erro}")
+            return
+
+        caminho_confirmados, caminho_nao_localizados, confirmados, nao_localizados = resultado
+        self.ultimos_pagamentos_confirmados = confirmados
+        self.ultimos_pagamentos_nao_localizados = nao_localizados
+        self.botao_gerar_pdf_pagamentos.configure(state="normal")
+
+        messagebox.showinfo(
+            "AuditaDAE",
+            f"Verificação de pagamentos concluída.\n\nPagamentos confirmados: {caminho_confirmados}\n"
+            f"Não localizados: {caminho_nao_localizados}",
+        )
+
+    def _gerar_pdf_pagamentos(self) -> None:
+        if not self.ultimos_pagamentos_confirmados and not self.ultimos_pagamentos_nao_localizados:
+            messagebox.showwarning("AuditaDAE", "Nenhum resultado de verificação de pagamentos para incluir no PDF.")
+            return
+
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar Relatório de Pagamentos PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile="relatorio_pagamentos.pdf",
+        )
+        if not caminho:
+            return
+
+        try:
+            gerar_relatorio_pagamentos_pdf(
+                self.ultimos_pagamentos_confirmados, self.ultimos_pagamentos_nao_localizados, Path(caminho)
+            )
         except Exception as erro:
             messagebox.showerror("AuditaDAE", f"Falha ao gerar PDF: {erro}")
             return

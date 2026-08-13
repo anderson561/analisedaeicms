@@ -33,6 +33,33 @@ class NotaNaoEncontrada(BaseModel):
     status: str = "Não Encontrada em Nenhum DAE Processado"
 
 
+class LinhaPagamentoDae(BaseModel):
+    nosso_numero: str
+    data_pagamento: str | None = None
+    referencia_bruta: str | None = None
+    mes_referencia: int | None = None
+    ano_referencia: int | None = None
+    codigo_receita: str | None = None
+    descricao_receita: str | None = None
+    valor_principal: float | None = None
+    valor_total: float | None = None
+    revisar: bool = False
+
+
+class PagamentoConfirmado(BaseModel):
+    dae_arquivo_origem: str
+    linha_pagamento: LinhaPagamentoDae
+    status: str = "Pagamento Confirmado"
+
+
+class DaePagamentoNaoLocalizado(BaseModel):
+    arquivo_origem: str
+    codigo_receita: str | None = None
+    referencia: str | None = None
+    valor_principal: float | None = None
+    status: str = "Não Localizada no Relatório de Pagamentos"
+
+
 class RegistroDae(BaseModel):
     id: int | None = None
     arquivo_origem: str

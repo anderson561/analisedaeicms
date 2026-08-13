@@ -1,4 +1,5 @@
 .claude/worktrees/
+vendor/
 
 __pycache__/
 *.pyc
