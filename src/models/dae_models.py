@@ -28,10 +28,9 @@ class NotaConciliada(BaseModel):
 
 class NotaNaoEncontrada(BaseModel):
     numero_nf: str
-    arquivo_dae_origem: str
-    codigo_receita: str | None = None
-    valor_principal: float | None = None
-    status: str = "Não Encontrada no Relatório"
+    data_emissao: str | None = None
+    cnpj_emitente: str | None = None
+    status: str = "Não Encontrada em Nenhum DAE Processado"
 
 
 class RegistroDae(BaseModel):

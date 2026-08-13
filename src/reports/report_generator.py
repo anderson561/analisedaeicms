@@ -15,10 +15,9 @@ COLUNAS_CONCILIADAS = [
 ]
 
 COLUNAS_NAO_ENCONTRADAS = [
-    "Número da NF (Extraída do DAE)",
-    "Arquivo DAE Origem",
-    "Código da Receita",
-    "Valor Principal DAE",
+    "Número da NF",
+    "Data de Emissão",
+    "CNPJ do Emitente",
     "Status",
 ]
 
@@ -52,9 +51,8 @@ def gerar_relatorio_nao_encontradas(nao_encontradas: list[NotaNaoEncontrada], ca
     linhas = [
         [
             nota.numero_nf,
-            nota.arquivo_dae_origem,
-            nota.codigo_receita,
-            nota.valor_principal,
+            nota.data_emissao,
+            nota.cnpj_emitente,
             f"🔴 {nota.status}",
         ]
         for nota in nao_encontradas

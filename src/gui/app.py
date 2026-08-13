@@ -30,12 +30,12 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
     def _montar_layout(self) -> None:
         frame_dae = ctk.CTkFrame(self)
         frame_dae.pack(fill="x", padx=16, pady=(16, 8))
-        ctk.CTkLabel(frame_dae, text="DAEs/DARFs (PDF) — solte arquivos aqui ou selecione").pack(anchor="w", padx=8, pady=(8, 0))
+        ctk.CTkLabel(frame_dae, text="DAE/DARF (PDF) — solte 1 ou mais arquivos aqui ou selecione").pack(anchor="w", padx=8, pady=(8, 0))
         self.lista_dae = ctk.CTkTextbox(frame_dae, height=90)
         self.lista_dae.pack(fill="x", padx=8, pady=8)
         self.lista_dae.drop_target_register(DND_FILES)
         self.lista_dae.dnd_bind("<<Drop>>", self._on_drop_dae)
-        ctk.CTkButton(frame_dae, text="Selecionar PDFs de DAE", command=self._selecionar_daes).pack(padx=8, pady=(0, 8), anchor="w")
+        ctk.CTkButton(frame_dae, text="Selecionar PDF(s) de DAE", command=self._selecionar_daes).pack(padx=8, pady=(0, 8), anchor="w")
 
         frame_relatorio = ctk.CTkFrame(self)
         frame_relatorio.pack(fill="x", padx=16, pady=8)

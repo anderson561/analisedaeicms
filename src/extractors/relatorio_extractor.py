@@ -6,6 +6,7 @@ import openpyxl
 import pdfplumber
 import xlrd
 
+from src.extractors.mapa_extractor import eh_mapa_aquisicao, extrair_notas_mapa_aquisicao
 from src.models.dae_models import LinhaRelatorio
 
 PADRAO_COLUNA_NF = re.compile(r"n[uú]mero.*nota|n[ºo°]?\s*nf|nota\s*fiscal|^nf$", re.IGNORECASE)
@@ -87,6 +88,8 @@ def _ler_pdf(caminho: str, coluna_nf: str | None) -> list[LinhaRelatorio]:
 
 def ler_relatorio(caminho: str, coluna_nf: str | None = None) -> list[LinhaRelatorio]:
     extensao = Path(caminho).suffix.lower()
+    if extensao == ".xlsx" and eh_mapa_aquisicao(caminho):
+        return extrair_notas_mapa_aquisicao(caminho)
     if extensao == ".xlsx":
         return _ler_xlsx(caminho, coluna_nf)
     if extensao == ".xls":

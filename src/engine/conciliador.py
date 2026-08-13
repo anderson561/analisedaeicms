@@ -12,32 +12,41 @@ def sanitize_nf_numero(nf: str) -> str:
 def conciliar(
     daes: list[DaeDocumento], linhas_relatorio: list[LinhaRelatorio]
 ) -> tuple[list[NotaConciliada], list[NotaNaoEncontrada]]:
-    indice_relatorio = {sanitize_nf_numero(linha.numero_nf): linha for linha in linhas_relatorio}
+    """Concilia o mapa de notas (ex.: NF_Aquisicao) contra os DAEs processados.
+
+    Cada nota do mapa é o ponto de partida: se ela é citada em algum DAE
+    (campo "Notas Fiscais"), está conciliada; caso contrário, ela é reportada
+    como não encontrada em nenhum DAE processado (possível ICMS antecipação
+    não recolhido).
+    """
+    indice_notas_dae: dict[str, DaeDocumento] = {}
+    for dae in daes:
+        for nf_bruta in dae.notas_fiscais:
+            indice_notas_dae.setdefault(sanitize_nf_numero(nf_bruta), dae)
 
     conciliadas: list[NotaConciliada] = []
     nao_encontradas: list[NotaNaoEncontrada] = []
 
-    for dae in daes:
-        for nf_bruta in dae.notas_fiscais:
-            nf_chave = sanitize_nf_numero(nf_bruta)
-            if nf_chave in indice_relatorio:
-                conciliadas.append(
-                    NotaConciliada(
-                        numero_nf=nf_bruta,
-                        codigo_receita=dae.codigo_receita,
-                        referencia=dae.referencia,
-                        valor_principal=dae.valor_principal,
-                        especificacao_receita=dae.especificacao_receita,
-                    )
+    for linha in linhas_relatorio:
+        nf_chave = sanitize_nf_numero(linha.numero_nf)
+        dae_correspondente = indice_notas_dae.get(nf_chave)
+        if dae_correspondente is not None:
+            conciliadas.append(
+                NotaConciliada(
+                    numero_nf=linha.numero_nf,
+                    codigo_receita=dae_correspondente.codigo_receita,
+                    referencia=dae_correspondente.referencia,
+                    valor_principal=dae_correspondente.valor_principal,
+                    especificacao_receita=dae_correspondente.especificacao_receita,
                 )
-            else:
-                nao_encontradas.append(
-                    NotaNaoEncontrada(
-                        numero_nf=nf_bruta,
-                        arquivo_dae_origem=dae.arquivo_origem,
-                        codigo_receita=dae.codigo_receita,
-                        valor_principal=dae.valor_principal,
-                    )
+            )
+        else:
+            nao_encontradas.append(
+                NotaNaoEncontrada(
+                    numero_nf=linha.numero_nf,
+                    data_emissao=linha.dados_originais.get("Data Emissão"),
+                    cnpj_emitente=linha.dados_originais.get("CNPJ Emitente"),
                 )
+            )
 
     return conciliadas, nao_encontradas
