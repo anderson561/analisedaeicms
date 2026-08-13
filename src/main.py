@@ -5,7 +5,7 @@ from src.db.repository import salvar_conciliacao, salvar_dae
 from src.engine.conciliador import conciliar
 from src.extractors.dae_extractor import extrair_dae
 from src.extractors.relatorio_extractor import ler_relatorio
-from src.models.dae_models import NotaConciliada
+from src.models.dae_models import NotaConciliada, NotaNaoEncontrada
 from src.reports.report_generator import gerar_relatorios
 
 
@@ -14,7 +14,7 @@ def processar_lote(
     caminho_relatorio: str,
     diretorio_saida: str | None = None,
     coluna_nf: str | None = None,
-) -> tuple[Path, Path, list[NotaConciliada]]:
+) -> tuple[Path, Path, list[NotaConciliada], list[NotaNaoEncontrada]]:
     daes = [extrair_dae(caminho) for caminho in caminhos_dae]
     linhas_relatorio = ler_relatorio(caminho_relatorio, coluna_nf=coluna_nf)
 
@@ -33,4 +33,4 @@ def processar_lote(
 
     saida = diretorio_saida or str(Path(caminhos_dae[0]).parent if caminhos_dae else Path.cwd())
     caminho_conciliadas, caminho_nao_encontradas = gerar_relatorios(conciliadas, nao_encontradas, saida)
-    return caminho_conciliadas, caminho_nao_encontradas, conciliadas
+    return caminho_conciliadas, caminho_nao_encontradas, conciliadas, nao_encontradas

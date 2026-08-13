@@ -8,8 +8,11 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from src.db.database import obter_conexao
 from src.db.repository import listar_historico
 from src.main import processar_lote
-from src.models.dae_models import NotaConciliada
-from src.reports.report_generator import gerar_relatorio_conciliadas_pdf
+from src.models.dae_models import NotaConciliada, NotaNaoEncontrada
+from src.reports.report_generator import (
+    gerar_relatorio_conciliadas_pdf,
+    gerar_relatorio_nao_encontradas_pdf,
+)
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -26,6 +29,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.caminhos_dae: list[str] = []
         self.caminho_relatorio: str | None = None
         self.ultima_conciliacao: list[NotaConciliada] = []
+        self.ultima_nao_encontradas: list[NotaNaoEncontrada] = []
 
         self._montar_layout()
         self._atualizar_historico()
@@ -61,9 +65,17 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.botao_processar.pack(side="left")
 
         self.botao_gerar_pdf = ctk.CTkButton(
-            frame_acoes, text="Gerar Relatório PDF", command=self._gerar_pdf, state="disabled"
+            frame_acoes, text="Gerar Relatório PDF (Conciliadas)", command=self._gerar_pdf, state="disabled"
         )
         self.botao_gerar_pdf.pack(side="left", padx=(8, 0))
+
+        self.botao_gerar_pdf_nao_encontradas = ctk.CTkButton(
+            frame_acoes,
+            text="Gerar Relatório PDF (Não Encontradas)",
+            command=self._gerar_pdf_nao_encontradas,
+            state="disabled",
+        )
+        self.botao_gerar_pdf_nao_encontradas.pack(side="left", padx=(8, 0))
 
         frame_historico = ctk.CTkFrame(self)
         frame_historico.pack(fill="both", expand=True, padx=16, pady=(8, 16))
@@ -121,7 +133,9 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             self.after(0, self._processar_concluido, None, erro)
 
     def _processar_concluido(
-        self, resultado: tuple[Path, Path, list[NotaConciliada]] | None, erro: Exception | None
+        self,
+        resultado: tuple[Path, Path, list[NotaConciliada], list[NotaNaoEncontrada]] | None,
+        erro: Exception | None,
     ) -> None:
         self.barra_progresso.stop()
         self.botao_processar.configure(state="normal")
@@ -129,9 +143,11 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             messagebox.showerror("AuditaDAE", f"Falha ao processar: {erro}")
             return
 
-        caminho_conciliadas, caminho_nao_encontradas, conciliadas = resultado
+        caminho_conciliadas, caminho_nao_encontradas, conciliadas, nao_encontradas = resultado
         self.ultima_conciliacao = conciliadas
+        self.ultima_nao_encontradas = nao_encontradas
         self.botao_gerar_pdf.configure(state="normal")
+        self.botao_gerar_pdf_nao_encontradas.configure(state="normal")
 
         messagebox.showinfo(
             "AuditaDAE",
@@ -156,6 +172,28 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         try:
             gerar_relatorio_conciliadas_pdf(self.ultima_conciliacao, Path(caminho))
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar PDF: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório PDF gerado em:\n{caminho}")
+
+    def _gerar_pdf_nao_encontradas(self) -> None:
+        if not self.ultima_nao_encontradas:
+            messagebox.showwarning("AuditaDAE", "Nenhuma nota não encontrada para incluir no PDF.")
+            return
+
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar Relatório PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile="relatorio_nao_encontradas.pdf",
+        )
+        if not caminho:
+            return
+
+        try:
+            gerar_relatorio_nao_encontradas_pdf(self.ultima_nao_encontradas, Path(caminho))
         except Exception as erro:
             messagebox.showerror("AuditaDAE", f"Falha ao gerar PDF: {erro}")
             return

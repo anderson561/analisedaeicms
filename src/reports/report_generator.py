@@ -97,6 +97,50 @@ def gerar_relatorio_conciliadas_pdf(conciliadas: list[NotaConciliada], caminho: 
     return caminho
 
 
+def gerar_relatorio_nao_encontradas_pdf(nao_encontradas: list[NotaNaoEncontrada], caminho: Path) -> Path:
+    documento = SimpleDocTemplate(
+        str(caminho),
+        pagesize=landscape(A4),
+        title="AuditaDAE - Notas Nao Encontradas",
+    )
+    estilos = getSampleStyleSheet()
+    elementos = [
+        Paragraph("AuditaDAE — Notas Não Encontradas", estilos["Title"]),
+        Paragraph(f"Gerado em {datetime.now():%d/%m/%Y %H:%M}", estilos["Normal"]),
+        Spacer(1, 12),
+    ]
+
+    dados = [COLUNAS_NAO_ENCONTRADAS] + [
+        [
+            nota.numero_nf,
+            nota.data_emissao or "",
+            nota.cnpj_emitente or "",
+            nota.status,
+        ]
+        for nota in nao_encontradas
+    ]
+
+    tabela = Table(dados, repeatRows=1)
+    tabela.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#8f1f1f")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    elementos.append(tabela)
+    documento.build(elementos)
+    return caminho
+
+
 def gerar_relatorio_nao_encontradas(nao_encontradas: list[NotaNaoEncontrada], caminho: Path) -> Path:
     linhas = [
         [
