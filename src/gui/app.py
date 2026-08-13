@@ -1,0 +1,146 @@
+import threading
+from pathlib import Path
+from tkinter import filedialog, messagebox
+
+import customtkinter as ctk
+from tkinterdnd2 import DND_FILES, TkinterDnD
+
+from src.db.database import obter_conexao
+from src.db.repository import listar_historico
+from src.main import processar_lote
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+
+class App(ctk.CTk, TkinterDnD.DnDWrapper):
+    def __init__(self):
+        super().__init__()
+        self.TkdndVersion = TkinterDnD._require(self)
+
+        self.title("AuditaDAE — Conciliação de ICMS")
+        self.geometry("720x560")
+
+        self.caminhos_dae: list[str] = []
+        self.caminho_relatorio: str | None = None
+
+        self._montar_layout()
+        self._atualizar_historico()
+
+    def _montar_layout(self) -> None:
+        frame_dae = ctk.CTkFrame(self)
+        frame_dae.pack(fill="x", padx=16, pady=(16, 8))
+        ctk.CTkLabel(frame_dae, text="DAEs/DARFs (PDF) — solte arquivos aqui ou selecione").pack(anchor="w", padx=8, pady=(8, 0))
+        self.lista_dae = ctk.CTkTextbox(frame_dae, height=90)
+        self.lista_dae.pack(fill="x", padx=8, pady=8)
+        self.lista_dae.drop_target_register(DND_FILES)
+        self.lista_dae.dnd_bind("<<Drop>>", self._on_drop_dae)
+        ctk.CTkButton(frame_dae, text="Selecionar PDFs de DAE", command=self._selecionar_daes).pack(padx=8, pady=(0, 8), anchor="w")
+
+        frame_relatorio = ctk.CTkFrame(self)
+        frame_relatorio.pack(fill="x", padx=16, pady=8)
+        ctk.CTkLabel(frame_relatorio, text="Relatório de Notas Fiscais (xlsx/xls/csv/pdf)").pack(anchor="w", padx=8, pady=(8, 0))
+        self.label_relatorio = ctk.CTkLabel(frame_relatorio, text="Nenhum arquivo selecionado")
+        self.label_relatorio.pack(fill="x", padx=8, pady=4)
+        self.label_relatorio.drop_target_register(DND_FILES)
+        self.label_relatorio.dnd_bind("<<Drop>>", self._on_drop_relatorio)
+        ctk.CTkButton(frame_relatorio, text="Selecionar Relatório", command=self._selecionar_relatorio).pack(
+            padx=8, pady=(0, 8), anchor="w"
+        )
+
+        self.barra_progresso = ctk.CTkProgressBar(self, mode="indeterminate")
+        self.barra_progresso.pack(fill="x", padx=16, pady=8)
+
+        self.botao_processar = ctk.CTkButton(self, text="Processar", command=self._processar)
+        self.botao_processar.pack(padx=16, pady=(0, 8), anchor="w")
+
+        frame_historico = ctk.CTkFrame(self)
+        frame_historico.pack(fill="both", expand=True, padx=16, pady=(8, 16))
+        ctk.CTkLabel(frame_historico, text="Histórico de Conciliações").pack(anchor="w", padx=8, pady=(8, 0))
+        self.texto_historico = ctk.CTkTextbox(frame_historico)
+        self.texto_historico.pack(fill="both", expand=True, padx=8, pady=8)
+
+    def _on_drop_dae(self, evento) -> None:
+        caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
+        self.caminhos_dae.extend(caminhos)
+        self._atualizar_lista_dae()
+
+    def _selecionar_daes(self) -> None:
+        caminhos = filedialog.askopenfilenames(title="Selecionar PDFs de DAE", filetypes=[("PDF", "*.pdf")])
+        if caminhos:
+            self.caminhos_dae.extend(caminhos)
+            self._atualizar_lista_dae()
+
+    def _atualizar_lista_dae(self) -> None:
+        self.lista_dae.delete("1.0", "end")
+        self.lista_dae.insert("1.0", "\n".join(self.caminhos_dae))
+
+    def _on_drop_relatorio(self, evento) -> None:
+        caminhos = self.tk.splitlist(evento.data)
+        if caminhos:
+            self.caminho_relatorio = caminhos[0]
+            self.label_relatorio.configure(text=self.caminho_relatorio)
+
+    def _selecionar_relatorio(self) -> None:
+        caminho = filedialog.askopenfilename(
+            title="Selecionar Relatório",
+            filetypes=[("Planilhas e PDF", "*.xlsx *.xls *.csv *.pdf")],
+        )
+        if caminho:
+            self.caminho_relatorio = caminho
+            self.label_relatorio.configure(text=caminho)
+
+    def _processar(self) -> None:
+        if not self.caminhos_dae:
+            messagebox.showwarning("AuditaDAE", "Selecione ao menos um PDF de DAE.")
+            return
+        if not self.caminho_relatorio:
+            messagebox.showwarning("AuditaDAE", "Selecione o relatório de notas fiscais.")
+            return
+
+        self.botao_processar.configure(state="disabled")
+        self.barra_progresso.start()
+        threading.Thread(target=self._processar_em_background, daemon=True).start()
+
+    def _processar_em_background(self) -> None:
+        try:
+            caminho_conciliadas, caminho_nao_encontradas = processar_lote(
+                self.caminhos_dae, self.caminho_relatorio
+            )
+            self.after(0, self._processar_concluido, caminho_conciliadas, caminho_nao_encontradas, None)
+        except Exception as erro:
+            self.after(0, self._processar_concluido, None, None, erro)
+
+    def _processar_concluido(self, caminho_conciliadas: Path | None, caminho_nao_encontradas: Path | None, erro: Exception | None) -> None:
+        self.barra_progresso.stop()
+        self.botao_processar.configure(state="normal")
+        if erro is not None:
+            messagebox.showerror("AuditaDAE", f"Falha ao processar: {erro}")
+            return
+        messagebox.showinfo(
+            "AuditaDAE",
+            f"Processamento concluído.\n\nRelatório de conciliadas: {caminho_conciliadas}\n"
+            f"Relatório de não encontradas: {caminho_nao_encontradas}",
+        )
+        self._atualizar_historico()
+
+    def _atualizar_historico(self) -> None:
+        conexao = obter_conexao()
+        try:
+            registros = listar_historico(conexao, limite=50)
+        finally:
+            conexao.close()
+
+        self.texto_historico.delete("1.0", "end")
+        for registro in registros:
+            linha = f"{registro.data_processamento:%d/%m/%Y %H:%M} — NF {registro.numero_nf} — {registro.status}\n"
+            self.texto_historico.insert("end", linha)
+
+
+def main() -> None:
+    app = App()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()
