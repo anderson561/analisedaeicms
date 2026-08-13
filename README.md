@@ -34,13 +34,19 @@ pytest tests/ -v
 
 ## Build do executável (.exe)
 
+Dê dois cliques em **`build.bat`** (ou rode-o pelo terminal). Ele detecta o que mudou desde o último build e regenera só o necessário — use sempre que alterar o código e quiser atualizar o `.exe`.
+
+Equivalente manual:
+
 ```bash
 pyinstaller auditadae.spec --noconfirm
 ```
 
-O executável é gerado em `dist/AuditaDAE/AuditaDAE.exe` (modo *onedir* — pasta com o `.exe` e suas dependências), sem depender de Python instalado na máquina de destino. Distribua a pasta `dist/AuditaDAE/` inteira, não apenas o `.exe`.
+O executável é gerado em `dist/AuditaDAE/AuditaDAE.exe` (modo *onedir* — pasta com o `.exe` e suas dependências), sem depender de Python instalado na máquina de destino. Distribua a pasta `dist/AuditaDAE/` inteira, não apenas o `.exe` (ela depende da subpasta `_internal` ao lado).
 
-> **Nota:** o modo *onedir* foi escolhido em vez de *onefile* porque o onefile precisa se reextrair para uma pasta temporária a cada execução — em testes isso levou de 10 a 25+ segundos para a janela aparecer na primeira abertura (soma-se a isso o Windows Defender escaneando o executável recém-criado). Em modo onedir, a janela abre em ~2-3 segundos.
+> **Notas:**
+> - O modo *onedir* foi escolhido em vez de *onefile* porque o onefile precisa se reextrair para uma pasta temporária a cada execução — em testes isso levou de 10 a 25+ segundos para a janela aparecer na primeira abertura (soma-se a isso o Windows Defender escaneando o executável recém-criado). Em modo onedir, a janela abre em ~2-3 segundos.
+> - Como o `.exe` não é assinado digitalmente, o Windows SmartScreen deve exibir "Windows protegeu seu PC" na primeira execução em qualquer máquina nova (inclusive a que gerou o build) — basta clicar em "Mais informações" → "Executar assim mesmo". Não indica problema no aplicativo.
 
 ## Estrutura
 
