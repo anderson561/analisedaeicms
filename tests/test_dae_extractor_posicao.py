@@ -85,3 +85,37 @@ def test_notas_fiscais_nao_vazam_digitos_do_codigo_de_barras_da_segunda_via():
     assert "0" not in dae.notas_fiscais
     assert "9" not in dae.notas_fiscais
     assert len(dae.notas_fiscais) == 3
+
+
+def _montar_pagina_dae_sem_prefixo_numerico() -> _PaginaFalsa:
+    # Variante real observada em DAEs mais recentes do mesmo cliente: os
+    # rótulos vêm sem o prefixo "N-" (ex.: "CÓDIGO" em vez de "1-CÓDIGO").
+    palavras = [
+        _w("CÓDIGO", 428.0, 133.0),
+        _w("DA", 456.0, 133.0),
+        _w("RECEITA", 465.0, 133.0),
+        _w("1145", 428.0, 139.0),
+        _w("REFERÊNCIA", 428.0, 197.0),
+        _w("04/2023", 428.0, 203.0),
+        _w("VALOR", 428.0, 262.0),
+        _w("PRINCIPAL", 452.0, 262.0),
+        _w("R$", 428.0, 268.0),
+        _w("5.131,36", 442.0, 268.0),
+        _w("ESPECIFICAÇÃO", 148.0, 197.0),
+        _w("DA", 199.0, 197.0),
+        _w("RECEITA", 208.0, 197.0),
+        _w("ICMS", 148.0, 204.0),
+        _w("ANTECIPAÇÃO", 172.0, 204.0),
+        _w("TRIBUTÁRIA", 240.0, 204.0),
+    ]
+    return _PaginaFalsa(palavras, width=595.0)
+
+
+def test_extrai_campos_quando_rotulos_nao_tem_prefixo_numerico():
+    pagina = _montar_pagina_dae_sem_prefixo_numerico()
+    dae = _extrair_dae_por_posicao(pagina, arquivo_origem="dae_teste.pdf")
+
+    assert dae.codigo_receita == "1145"
+    assert dae.referencia == "04/2023"
+    assert dae.valor_principal == 5131.36
+    assert dae.especificacao_receita == "ICMS ANTECIPAÇÃO TRIBUTÁRIA"

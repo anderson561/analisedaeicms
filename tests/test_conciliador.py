@@ -1,5 +1,5 @@
-from src.engine.conciliador import conciliar, sanitize_nf_numero
-from src.models.dae_models import DaeDocumento, LinhaRelatorio
+from src.engine.conciliador import conciliar, filtrar_conciliadas_com_dados, sanitize_nf_numero
+from src.models.dae_models import DaeDocumento, LinhaRelatorio, NotaConciliada
 
 
 def test_sanitize_remove_pontuacao_e_zeros_a_esquerda():
@@ -69,3 +69,24 @@ def test_nota_do_mapa_encontrada_em_qualquer_dae_do_lote():
 
     assert {n.numero_nf for n in conciliadas} == {"1020", "2002"}
     assert {n.numero_nf for n in nao_encontradas} == {"3000"}
+
+
+def test_filtrar_conciliadas_com_dados_remove_notas_sem_nenhum_campo_util():
+    sem_dados = NotaConciliada(numero_nf="1020")
+    com_dados = NotaConciliada(numero_nf="2002", codigo_receita="1145")
+
+    resultado = filtrar_conciliadas_com_dados([sem_dados, com_dados])
+
+    assert resultado == [com_dados]
+
+
+def test_filtrar_conciliadas_com_dados_mantem_nota_com_valor_principal_zero():
+    nota = NotaConciliada(numero_nf="1020", valor_principal=0.0)
+
+    resultado = filtrar_conciliadas_com_dados([nota])
+
+    assert resultado == [nota]
+
+
+def test_filtrar_conciliadas_com_dados_lista_vazia():
+    assert filtrar_conciliadas_com_dados([]) == []

@@ -60,6 +60,50 @@ class DaePagamentoNaoLocalizado(BaseModel):
     status: str = "Não Localizada no Relatório de Pagamentos"
 
 
+class LinhaParcelamento(BaseModel):
+    paf: str | None = None
+    arquivo_origem: str
+    data_ocorrencia: str | None = None
+    data_vencimento: str | None = None
+    mes_ocorrencia: int | None = None
+    ano_ocorrencia: int | None = None
+    valor_historico: float | None = None
+    valor_debito: float | None = None
+
+
+class DaeParceladoEncontrado(BaseModel):
+    dae_arquivo_origem: str
+    linha_parcelamento: LinhaParcelamento
+    status: str = "DAE Localizado no Parcelamento"
+
+
+class DaeParceladoNaoEncontrado(BaseModel):
+    arquivo_origem: str
+    codigo_receita: str | None = None
+    referencia: str | None = None
+    valor_principal: float | None = None
+    status: str = "Não Localizado no Relatório de Parcelamentos"
+
+
+class LinhaIcmsAt(BaseModel):
+    ano: int
+    mes: int
+    valor_apurado: float | None = None
+    valor_pago: float | None = None
+    valor_a_recolher: float | None = None
+
+
+class ResultadoProcessamento(BaseModel):
+    conciliadas: list[NotaConciliada] = []
+    nao_encontradas: list[NotaNaoEncontrada] = []
+    linhas_icms_at: list[LinhaIcmsAt] = []
+    pagamentos_confirmados: list[PagamentoConfirmado] = []
+    pagamentos_nao_localizados: list[DaePagamentoNaoLocalizado] = []
+    parcelamento_encontrados: list[DaeParceladoEncontrado] = []
+    parcelamento_nao_encontrados: list[DaeParceladoNaoEncontrado] = []
+    daes: list[DaeDocumento] = []
+
+
 class RegistroDae(BaseModel):
     id: int | None = None
     arquivo_origem: str

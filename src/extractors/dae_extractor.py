@@ -120,10 +120,10 @@ def parse_dae_texto(texto: str, arquivo_origem: str = "") -> DaeDocumento:
 # errado. Em vez disso, localizamos cada rótulo pela sua posição (x, y) e
 # lemos o valor na linha imediatamente abaixo, na mesma coluna.
 
-ROTULO_CODIGO_RECEITA_POS = re.compile(r"^\d+-C[oó]digo", re.IGNORECASE)
-ROTULO_REFERENCIA_POS = re.compile(r"^\d+-Refer[eê]ncia", re.IGNORECASE)
-ROTULO_VALOR_PRINCIPAL_POS = re.compile(r"^\d+-Valor", re.IGNORECASE)
-ROTULO_ESPECIFICACAO_POS = re.compile(r"^\d+-Especifica", re.IGNORECASE)
+ROTULO_CODIGO_RECEITA_POS = re.compile(r"^(?:\d+-)?C[oó]digo", re.IGNORECASE)
+ROTULO_REFERENCIA_POS = re.compile(r"^(?:\d+-)?Refer[eê]ncia", re.IGNORECASE)
+ROTULO_VALOR_PRINCIPAL_POS = re.compile(r"^(?:\d+-)?Valor", re.IGNORECASE)
+ROTULO_ESPECIFICACAO_POS = re.compile(r"^(?:\d+-)?Especifica", re.IGNORECASE)
 
 GAP_MAXIMO_MESMO_VALOR = 25.0
 DISTANCIA_MAX_TOP_ROTULO = 15.0

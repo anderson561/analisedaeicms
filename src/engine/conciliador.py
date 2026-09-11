@@ -50,3 +50,14 @@ def conciliar(
             )
 
     return conciliadas, nao_encontradas
+
+
+def filtrar_conciliadas_com_dados(conciliadas: list[NotaConciliada]) -> list[NotaConciliada]:
+    """Remove conciliadas cujo DAE correspondente não teve nenhum campo de cabeçalho
+    extraído (código_receita/referência/valor_principal/especificação_receita todos
+    vazios) -- a nota foi encontrada, mas sem dado útil para exibir no relatório."""
+    return [
+        nota
+        for nota in conciliadas
+        if nota.codigo_receita or nota.referencia or nota.valor_principal is not None or nota.especificacao_receita
+    ]
