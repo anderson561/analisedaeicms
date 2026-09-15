@@ -2,7 +2,14 @@ import openpyxl
 import pdfplumber
 
 from src.models.dae_models import NotaConciliada, NotaNaoEncontrada
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Table
+
 from src.reports.report_generator import (
+    _agrupar_conciliadas_por_dae,
+    _agrupar_por_ano_mes,
+    _ano_mes_da_referencia,
+    _elementos_conciliadas_agrupadas,
     gerar_relatorio_conciliadas,
     gerar_relatorio_conciliadas_pdf,
     gerar_relatorio_nao_encontradas,
@@ -207,3 +214,133 @@ def test_gerar_relatorio_nao_encontradas_excel_lista_vazia(tmp_path):
         "CNPJ do Emitente",
         "Status",
     ]
+
+
+def _nota(numero_nf, codigo_receita, referencia, valor_principal, especificacao="ICMS ANTECIPAÇÃO TRIBUTÁRIA"):
+    return NotaConciliada(
+        numero_nf=numero_nf,
+        codigo_receita=codigo_receita,
+        referencia=referencia,
+        valor_principal=valor_principal,
+        especificacao_receita=especificacao,
+    )
+
+
+def test_agrupar_conciliadas_por_dae_junta_nfs_do_mesmo_dae_em_um_bloco():
+    notas = [
+        _nota("1", "1145", "12/2025", 100.0),
+        _nota("2", "1145", "12/2025", 100.0),
+        _nota("3", "1145", "12/2025", 100.0),
+    ]
+
+    blocos = _agrupar_conciliadas_por_dae(notas)
+
+    assert len(blocos) == 1
+    assert [n.numero_nf for n in blocos[0]] == ["1", "2", "3"]
+
+
+def test_agrupar_conciliadas_por_dae_ordena_por_valor_decrescente():
+    notas = [
+        _nota("1", "2175", "12/2025", 184.48),
+        _nota("2", "1145", "12/2025", 6405.82),
+        _nota("3", "1145", "12/2025", 5703.74),
+    ]
+
+    blocos = _agrupar_conciliadas_por_dae(notas)
+
+    assert [bloco[0].valor_principal for bloco in blocos] == [6405.82, 5703.74, 184.48]
+
+
+def test_agrupar_conciliadas_por_dae_sem_valor_fica_por_ultimo_e_mantem_ordem():
+    notas = [
+        _nota("1", "1145", None, None),
+        _nota("2", "9999", "12/2025", 100.0),
+        _nota("3", "2175", None, None),
+    ]
+
+    blocos = _agrupar_conciliadas_por_dae(notas)
+
+    assert blocos[0][0].valor_principal == 100.0
+    assert [n.numero_nf for n in blocos[1]] == ["1"]
+    assert [n.numero_nf for n in blocos[2]] == ["3"]
+
+
+def test_gerar_relatorio_conciliadas_excel_mescla_nfs_do_mesmo_dae(tmp_path):
+    conciliadas = [
+        _nota("1", "1145", "12/2025", 5703.74),
+        _nota("2", "1145", "12/2025", 6405.82),
+        _nota("3", "1145", "12/2025", 6405.82),
+        _nota("4", "1145", "12/2025", 6405.82),
+        _nota("5", "2175", "12/2025", 184.48, especificacao="ICMS - ANTECIPACAO PARCIAL"),
+    ]
+    caminho = tmp_path / "conciliadas_mescladas.xlsx"
+
+    gerar_relatorio_conciliadas(conciliadas, caminho)
+
+    workbook = openpyxl.load_workbook(caminho)
+    planilha = workbook.active
+    valores = [[c.value for c in linha] for linha in planilha.iter_rows()]
+
+    # Linha 0: "Mês 12" (sem ano identificável, referência não é reconhecida por
+    # _ano_mes_da_referencia pois falta o padrão completo -- aqui usamos uma
+    # referência válida "12/2025" que cai em Ano 2025 / Mês 12.
+    assert valores[0][0] == "Ano 2025"
+    assert valores[1][0] == "Mês 12"
+    assert valores[2][0] == "Número da NF"
+
+    # Bloco do maior valor (6405.82, NFs 2/3/4) vem primeiro.
+    assert valores[3] == ["2", "1145", "12/2025", 6405.82, "ICMS ANTECIPAÇÃO TRIBUTÁRIA", "🟢 Conciliado"]
+    assert valores[4][0] == "3"
+    assert valores[4][1] is None
+    assert valores[5][0] == "4"
+    assert valores[5][1] is None
+
+    # Bloco seguinte (5703.74, NF 1) -- bloco de uma linha só, sem mesclagem.
+    assert valores[6] == ["1", "1145", "12/2025", 5703.74, "ICMS ANTECIPAÇÃO TRIBUTÁRIA", "🟢 Conciliado"]
+
+    # Bloco do código 2175 (184.48, NF 5) por último.
+    assert valores[7] == ["5", "2175", "12/2025", 184.48, "ICMS - ANTECIPACAO PARCIAL", "🟢 Conciliado"]
+
+    faixas_mescladas = {str(faixa) for faixa in planilha.merged_cells.ranges}
+    assert "B4:B6" in faixas_mescladas
+    assert "C4:C6" in faixas_mescladas
+    assert "D4:D6" in faixas_mescladas
+    assert "E4:E6" in faixas_mescladas
+    assert "F4:F6" in faixas_mescladas
+    # bloco de uma linha só (5703.74) e o de 184.48 não geram merge nenhum
+    assert not any(faixa.startswith("B7") or faixa.startswith("B8") for faixa in faixas_mescladas)
+
+
+def test_gerar_relatorio_conciliadas_pdf_mescla_nfs_do_mesmo_dae(tmp_path):
+    conciliadas = [
+        _nota("1", "1145", "12/2025", 6405.82),
+        _nota("2", "1145", "12/2025", 6405.82),
+        _nota("3", "2175", "12/2025", 184.48),
+    ]
+    caminho = tmp_path / "conciliadas_mescladas.pdf"
+
+    resultado = gerar_relatorio_conciliadas_pdf(conciliadas, caminho)
+
+    assert resultado.exists()
+    with pdfplumber.open(caminho) as pdf:
+        texto = "\n".join(pagina.extract_text() or "" for pagina in pdf.pages)
+    assert "1" in texto and "2" in texto and "3" in texto
+
+
+def test_elementos_conciliadas_agrupadas_gera_span_para_bloco_com_mais_de_uma_nf():
+    conciliadas = [
+        _nota("1", "1145", "12/2025", 6405.82),
+        _nota("2", "1145", "12/2025", 6405.82),
+        _nota("3", "2175", "12/2025", 184.48),
+    ]
+    grupos = _agrupar_por_ano_mes(conciliadas, lambda n: _ano_mes_da_referencia(n.referencia))
+
+    elementos = _elementos_conciliadas_agrupadas(getSampleStyleSheet(), grupos)
+
+    tabela = next(el for el in elementos if isinstance(el, Table))
+    spans = {(cmd[1], cmd[2]) for cmd in tabela._spanCmds}
+    # linha 1 e 2 (0-indexed, após o cabeçalho na linha 0) formam o bloco das duas NFs de 6405.82
+    for coluna in range(1, 6):
+        assert ((coluna, 1), (coluna, 2)) in spans
+    # bloco de uma linha só (NF 3, 184.48) não deve gerar nenhum span
+    assert not any(inicio[1] == 3 for inicio, _fim in spans)

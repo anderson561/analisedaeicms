@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, TypeVar
 
 from openpyxl import Workbook
+from openpyxl.styles import Alignment
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
@@ -153,23 +154,95 @@ def _escrever_planilha_por_ano_mes(
                 planilha.append(linha_de(item))
 
 
+def _linhas_bloco_mesclado(
+    bloco: list[T], linha_de: Callable[[T], list], colunas_fixas: tuple[int, ...], valor_branco=None
+) -> list[list]:
+    """Converte um bloco de itens em linhas; a partir da 2ª linha, zera as
+    `colunas_fixas` (índices 0-based) para que fiquem em branco -- essas
+    colunas serão mescladas em seguida, cobrindo todo o bloco."""
+    linhas = []
+    for indice, item in enumerate(bloco):
+        linha = list(linha_de(item))
+        if indice > 0:
+            for col in colunas_fixas:
+                linha[col] = valor_branco
+        linhas.append(linha)
+    return linhas
+
+
+def _chave_dae_conciliada(nota: NotaConciliada) -> tuple:
+    return (nota.codigo_receita, nota.referencia, nota.valor_principal, nota.especificacao_receita)
+
+
+def _agrupar_conciliadas_por_dae(itens: list[NotaConciliada]) -> list[list[NotaConciliada]]:
+    """Agrupa NFs que pertencem ao mesmo DAE (mesma chave), preservando a ordem
+    original das NFs dentro do bloco, e ordena os blocos por Valor Principal
+    decrescente (sem valor identificado vai por último)."""
+    blocos: dict[tuple, list[NotaConciliada]] = {}
+    ordem: list[tuple] = []
+    for nota in itens:
+        chave = _chave_dae_conciliada(nota)
+        if chave not in blocos:
+            blocos[chave] = []
+            ordem.append(chave)
+        blocos[chave].append(nota)
+
+    def _ordenacao(chave: tuple) -> tuple:
+        valor = chave[2]
+        return (valor is None, -valor if valor is not None else 0.0)
+
+    ordem.sort(key=_ordenacao)
+    return [blocos[chave] for chave in ordem]
+
+
+def _linha_conciliada_excel(nota: NotaConciliada) -> list:
+    return [
+        nota.numero_nf,
+        nota.codigo_receita,
+        nota.referencia,
+        nota.valor_principal,
+        nota.especificacao_receita,
+        f"🟢 {nota.status}",
+    ]
+
+
+def _escrever_conciliadas_agrupadas(
+    planilha, grupos_ano: list[tuple[int | None, list[tuple[int | None, list[NotaConciliada]]]]]
+) -> None:
+    if not grupos_ano:
+        planilha.append(COLUNAS_CONCILIADAS)
+        return
+    primeiro_ano = True
+    for ano, grupos_mes in grupos_ano:
+        if not primeiro_ano:
+            planilha.append([])
+        primeiro_ano = False
+        planilha.append([_titulo_ano(ano)])
+        primeiro_mes = True
+        for mes, itens in grupos_mes:
+            if not primeiro_mes:
+                planilha.append([])
+            primeiro_mes = False
+            planilha.append([_titulo_mes(mes)])
+            planilha.append(COLUNAS_CONCILIADAS)
+            for bloco in _agrupar_conciliadas_por_dae(itens):
+                linha_inicio = planilha.max_row + 1
+                for linha in _linhas_bloco_mesclado(bloco, _linha_conciliada_excel, (1, 2, 3, 4, 5)):
+                    planilha.append(linha)
+                linha_fim = planilha.max_row
+                if linha_fim > linha_inicio:
+                    for coluna in range(2, 7):
+                        planilha.merge_cells(
+                            start_row=linha_inicio, start_column=coluna, end_row=linha_fim, end_column=coluna
+                        )
+                        planilha.cell(row=linha_inicio, column=coluna).alignment = Alignment(vertical="center")
+
+
 def gerar_relatorio_conciliadas(conciliadas: list[NotaConciliada], caminho: Path) -> Path:
     workbook = Workbook()
     planilha = workbook.active
     grupos = _agrupar_por_ano_mes(conciliadas, lambda n: _ano_mes_da_referencia(n.referencia))
-    _escrever_planilha_por_ano_mes(
-        planilha,
-        COLUNAS_CONCILIADAS,
-        grupos,
-        lambda nota: [
-            nota.numero_nf,
-            nota.codigo_receita,
-            nota.referencia,
-            nota.valor_principal,
-            nota.especificacao_receita,
-            f"🟢 {nota.status}",
-        ],
-    )
+    _escrever_conciliadas_agrupadas(planilha, grupos)
     workbook.save(str(caminho))
     return caminho
 
@@ -196,6 +269,41 @@ def _elementos_por_ano_mes(
     return elementos
 
 
+def _linha_conciliada_pdf(nota: NotaConciliada) -> list:
+    return [
+        nota.numero_nf,
+        nota.codigo_receita or "",
+        nota.referencia or "",
+        f"{nota.valor_principal:.2f}" if nota.valor_principal is not None else "",
+        nota.especificacao_receita or "",
+        nota.status,
+    ]
+
+
+def _elementos_conciliadas_agrupadas(
+    estilos, grupos_ano: list[tuple[int | None, list[tuple[int | None, list[NotaConciliada]]]]]
+) -> list:
+    if not grupos_ano:
+        return [_tabela_relatorio([COLUNAS_CONCILIADAS], "#1f6f43")]
+    elementos = []
+    for ano, grupos_mes in grupos_ano:
+        elementos.append(Paragraph(_titulo_ano(ano), estilos["Heading2"]))
+        for mes, itens in grupos_mes:
+            elementos.append(Paragraph(_titulo_mes(mes), estilos["Heading3"]))
+            dados = [COLUNAS_CONCILIADAS]
+            comandos_extra = []
+            for bloco in _agrupar_conciliadas_por_dae(itens):
+                linha_inicio = len(dados)
+                dados.extend(_linhas_bloco_mesclado(bloco, _linha_conciliada_pdf, (1, 2, 3, 4, 5), valor_branco=""))
+                linha_fim = len(dados) - 1
+                if linha_fim > linha_inicio:
+                    for coluna in range(1, 6):
+                        comandos_extra.append(("SPAN", (coluna, linha_inicio), (coluna, linha_fim)))
+            elementos.append(_tabela_relatorio(dados, "#1f6f43", comandos_extra))
+            elementos.append(Spacer(1, 8))
+    return elementos
+
+
 def gerar_relatorio_conciliadas_pdf(conciliadas: list[NotaConciliada], caminho: Path) -> Path:
     documento = SimpleDocTemplate(
         str(caminho),
@@ -210,24 +318,7 @@ def gerar_relatorio_conciliadas_pdf(conciliadas: list[NotaConciliada], caminho: 
     ]
 
     grupos = _agrupar_por_ano_mes(conciliadas, lambda n: _ano_mes_da_referencia(n.referencia))
-    elementos.extend(
-        _elementos_por_ano_mes(
-            estilos,
-            COLUNAS_CONCILIADAS,
-            grupos,
-            lambda nota: [
-                nota.numero_nf,
-                nota.codigo_receita or "",
-                nota.referencia or "",
-                f"{nota.valor_principal:.2f}" if nota.valor_principal is not None else "",
-                nota.especificacao_receita or "",
-                nota.status,
-            ],
-            "#1f6f43",
-            "Heading2",
-            "Heading3",
-        )
-    )
+    elementos.extend(_elementos_conciliadas_agrupadas(estilos, grupos))
     documento.build(elementos)
     return caminho
 
@@ -335,23 +426,22 @@ def gerar_relatorio_pagamentos_excel(
     return caminho
 
 
-def _tabela_relatorio(dados: list[list], cor_cabecalho: str) -> Table:
+def _tabela_relatorio(dados: list[list], cor_cabecalho: str, comandos_extra: list | None = None) -> Table:
     tabela = Table(dados, repeatRows=1)
-    tabela.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(cor_cabecalho)),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
+    comandos = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(cor_cabecalho)),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f2f2f2")]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]
+    if comandos_extra:
+        comandos.extend(comandos_extra)
+    tabela.setStyle(TableStyle(comandos))
     return tabela
 
 

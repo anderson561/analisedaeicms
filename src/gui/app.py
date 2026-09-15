@@ -123,92 +123,91 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.botao_processar = ctk.CTkButton(frame_acoes_notas_1, text="Processar", command=self._processar)
         self.botao_processar.pack(side="left")
 
+        # Os 3 grupos abaixo só aparecem (pack) depois de "Processar" concluir,
+        # e só os pertinentes às fontes escolhidas -- ver _atualizar_grupos_visiveis_notas.
+        self.frame_grupo_aquisicao = ctk.CTkFrame(aba, fg_color="transparent")
+
+        frame_aquisicao_linha1 = ctk.CTkFrame(self.frame_grupo_aquisicao, fg_color="transparent")
+        frame_aquisicao_linha1.pack(fill="x", pady=(0, 4))
+
         self.botao_gerar_excel_conciliadas = ctk.CTkButton(
-            frame_acoes_notas_1,
+            frame_aquisicao_linha1,
             text="Gerar Relatório Excel (Conciliadas)",
             command=self._gerar_excel_conciliadas,
-            state="disabled",
         )
-        self.botao_gerar_excel_conciliadas.pack(side="left", padx=(8, 0))
+        self.botao_gerar_excel_conciliadas.pack(side="left")
 
         self.botao_gerar_pdf = ctk.CTkButton(
-            frame_acoes_notas_1, text="Gerar Relatório PDF (Conciliadas)", command=self._gerar_pdf, state="disabled"
+            frame_aquisicao_linha1, text="Gerar Relatório PDF (Conciliadas)", command=self._gerar_pdf
         )
         self.botao_gerar_pdf.pack(side="left", padx=(8, 0))
 
-        frame_acoes_notas_2 = ctk.CTkFrame(aba, fg_color="transparent")
-        frame_acoes_notas_2.pack(fill="x", padx=8, pady=(0, 8))
+        frame_aquisicao_linha2 = ctk.CTkFrame(self.frame_grupo_aquisicao, fg_color="transparent")
+        frame_aquisicao_linha2.pack(fill="x")
 
         self.botao_gerar_excel_nao_encontradas = ctk.CTkButton(
-            frame_acoes_notas_2,
+            frame_aquisicao_linha2,
             text="Gerar Relatório Excel (Não Encontradas)",
             command=self._gerar_excel_nao_encontradas,
-            state="disabled",
         )
         self.botao_gerar_excel_nao_encontradas.pack(side="left")
 
         self.botao_gerar_pdf_nao_encontradas = ctk.CTkButton(
-            frame_acoes_notas_2,
+            frame_aquisicao_linha2,
             text="Gerar Relatório PDF (Não Encontradas)",
             command=self._gerar_pdf_nao_encontradas,
-            state="disabled",
         )
         self.botao_gerar_pdf_nao_encontradas.pack(side="left", padx=(8, 0))
 
-        frame_acoes_notas_3 = ctk.CTkFrame(aba, fg_color="transparent")
-        frame_acoes_notas_3.pack(fill="x", padx=8, pady=(0, 8))
+        self.frame_grupo_icms_at = ctk.CTkFrame(aba, fg_color="transparent")
 
         self.botao_gerar_excel_icms_at = ctk.CTkButton(
-            frame_acoes_notas_3,
+            self.frame_grupo_icms_at,
             text="Gerar Relatório Excel (ICMS Antecipação Tributária)",
             command=self._gerar_excel_icms_at,
-            state="disabled",
         )
         self.botao_gerar_excel_icms_at.pack(side="left")
 
         self.botao_gerar_pdf_icms_at = ctk.CTkButton(
-            frame_acoes_notas_3,
+            self.frame_grupo_icms_at,
             text="Gerar Relatório PDF (ICMS Antecipação Tributária)",
             command=self._gerar_pdf_icms_at,
-            state="disabled",
         )
         self.botao_gerar_pdf_icms_at.pack(side="left", padx=(8, 0))
 
-        frame_acoes_notas_4 = ctk.CTkFrame(aba, fg_color="transparent")
-        frame_acoes_notas_4.pack(fill="x", padx=8, pady=(0, 4))
+        self.frame_grupo_pagamento_dae = ctk.CTkFrame(aba, fg_color="transparent")
+
+        frame_pagamento_dae_linha1 = ctk.CTkFrame(self.frame_grupo_pagamento_dae, fg_color="transparent")
+        frame_pagamento_dae_linha1.pack(fill="x", pady=(0, 4))
 
         self.botao_gerar_excel_pagamentos_planilha = ctk.CTkButton(
-            frame_acoes_notas_4,
+            frame_pagamento_dae_linha1,
             text="Gerar Relatório Excel (Pagamentos via Planilha)",
             command=self._gerar_excel_pagamentos_planilha,
-            state="disabled",
         )
         self.botao_gerar_excel_pagamentos_planilha.pack(side="left")
 
         self.botao_gerar_pdf_pagamentos_planilha = ctk.CTkButton(
-            frame_acoes_notas_4,
+            frame_pagamento_dae_linha1,
             text="Gerar Relatório PDF (Pagamentos via Planilha)",
             command=self._gerar_pdf_pagamentos_planilha,
-            state="disabled",
         )
         self.botao_gerar_pdf_pagamentos_planilha.pack(side="left", padx=(8, 0))
 
-        frame_acoes_notas_5 = ctk.CTkFrame(aba, fg_color="transparent")
-        frame_acoes_notas_5.pack(fill="x", padx=8, pady=(0, 8))
+        frame_pagamento_dae_linha2 = ctk.CTkFrame(self.frame_grupo_pagamento_dae, fg_color="transparent")
+        frame_pagamento_dae_linha2.pack(fill="x")
 
         self.botao_gerar_excel_parcelamento_planilha = ctk.CTkButton(
-            frame_acoes_notas_5,
+            frame_pagamento_dae_linha2,
             text="Gerar Relatório Excel (Parcelamento via Planilha)",
             command=self._gerar_excel_parcelamento_planilha,
-            state="disabled",
         )
         self.botao_gerar_excel_parcelamento_planilha.pack(side="left")
 
         self.botao_gerar_pdf_parcelamento_planilha = ctk.CTkButton(
-            frame_acoes_notas_5,
+            frame_pagamento_dae_linha2,
             text="Gerar Relatório PDF (Parcelamento via Planilha)",
             command=self._gerar_pdf_parcelamento_planilha,
-            state="disabled",
         )
         self.botao_gerar_pdf_parcelamento_planilha.pack(side="left", padx=(8, 0))
 
@@ -253,21 +252,18 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         )
         self.botao_verificar_pagamentos.pack(side="left")
 
+        # Só aparecem (pack) depois de "Verificar Pagamentos" concluir com sucesso.
         self.botao_gerar_excel_pagamentos = ctk.CTkButton(
             frame_acoes_pagamentos,
             text="Gerar Relatório de Pagamentos Excel",
             command=self._gerar_excel_pagamentos,
-            state="disabled",
         )
-        self.botao_gerar_excel_pagamentos.pack(side="left", padx=(8, 0))
 
         self.botao_gerar_pdf_pagamentos = ctk.CTkButton(
             frame_acoes_pagamentos,
             text="Gerar Relatório de Pagamentos em PDF",
             command=self._gerar_pdf_pagamentos,
-            state="disabled",
         )
-        self.botao_gerar_pdf_pagamentos.pack(side="left", padx=(8, 0))
 
     def _montar_aba_parcelamento(self, aba) -> None:
         frame_dae_parcelamento = ctk.CTkFrame(aba)
@@ -310,21 +306,18 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         )
         self.botao_verificar_parcelamento.pack(side="left")
 
+        # Só aparecem (pack) depois de "Verificar Parcelamentos" concluir com sucesso.
         self.botao_gerar_excel_parcelamento = ctk.CTkButton(
             frame_acoes_parcelamento,
             text="Gerar Relatório de Parcelamento Excel",
             command=self._gerar_excel_parcelamento,
-            state="disabled",
         )
-        self.botao_gerar_excel_parcelamento.pack(side="left", padx=(8, 0))
 
         self.botao_gerar_pdf_parcelamento = ctk.CTkButton(
             frame_acoes_parcelamento,
             text="Gerar Relatório de Parcelamento PDF",
             command=self._gerar_pdf_parcelamento,
-            state="disabled",
         )
-        self.botao_gerar_pdf_parcelamento.pack(side="left", padx=(8, 0))
 
     def _on_drop_dae(self, evento) -> None:
         caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
@@ -550,21 +543,8 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.ultimos_parcelamento_encontrados_planilha = resultado.parcelamento_encontrados
         self.ultimos_parcelamento_nao_encontrados_planilha = resultado.parcelamento_nao_encontrados
 
-        estado_aquisicao = "normal" if self.caminho_relatorio is not None and self.buscar_aquisicao_pendente else "disabled"
-        self.botao_gerar_excel_conciliadas.configure(state=estado_aquisicao)
-        self.botao_gerar_pdf.configure(state=estado_aquisicao)
-        self.botao_gerar_excel_nao_encontradas.configure(state=estado_aquisicao)
-        self.botao_gerar_pdf_nao_encontradas.configure(state=estado_aquisicao)
-
-        estado_icms_at = "normal" if self.buscar_icms_at_pendente else "disabled"
-        self.botao_gerar_excel_icms_at.configure(state=estado_icms_at)
-        self.botao_gerar_pdf_icms_at.configure(state=estado_icms_at)
-
-        estado_pagamento_dae = "normal" if self.buscar_pagamento_dae_pendente else "disabled"
-        self.botao_gerar_excel_pagamentos_planilha.configure(state=estado_pagamento_dae)
-        self.botao_gerar_pdf_pagamentos_planilha.configure(state=estado_pagamento_dae)
-        self.botao_gerar_excel_parcelamento_planilha.configure(state=estado_pagamento_dae)
-        self.botao_gerar_pdf_parcelamento_planilha.configure(state=estado_pagamento_dae)
+        self.buscar_aquisicao_pendente = self.caminho_relatorio is not None and self.buscar_aquisicao_pendente
+        self._atualizar_grupos_visiveis_notas()
 
         if self.caminho_relatorio is None:
             messagebox.showinfo(
@@ -592,6 +572,18 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         messagebox.showinfo("AuditaDAE", "Processamento concluído.\n\n" + "\n\n".join(resumo))
         self._atualizar_historico()
+
+    def _atualizar_grupos_visiveis_notas(self) -> None:
+        grupos = [
+            (self.frame_grupo_aquisicao, self.buscar_aquisicao_pendente),
+            (self.frame_grupo_icms_at, self.buscar_icms_at_pendente),
+            (self.frame_grupo_pagamento_dae, self.buscar_pagamento_dae_pendente),
+        ]
+        for frame, _ in grupos:
+            frame.pack_forget()
+        for frame, visivel in grupos:
+            if visivel:
+                frame.pack(fill="x", padx=8, pady=(0, 8))
 
     def _gerar_excel_conciliadas(self) -> None:
         if not self.ultima_conciliacao:
@@ -862,8 +854,8 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         confirmados, nao_localizados = resultado
         self.ultimos_pagamentos_confirmados = confirmados
         self.ultimos_pagamentos_nao_localizados = nao_localizados
-        self.botao_gerar_excel_pagamentos.configure(state="normal")
-        self.botao_gerar_pdf_pagamentos.configure(state="normal")
+        self.botao_gerar_excel_pagamentos.pack(side="left", padx=(8, 0))
+        self.botao_gerar_pdf_pagamentos.pack(side="left", padx=(8, 0))
 
         messagebox.showinfo(
             "AuditaDAE",
@@ -952,8 +944,8 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         encontrados, nao_encontrados = resultado
         self.ultimos_parcelamento_encontrados = encontrados
         self.ultimos_parcelamento_nao_encontrados = nao_encontrados
-        self.botao_gerar_excel_parcelamento.configure(state="normal")
-        self.botao_gerar_pdf_parcelamento.configure(state="normal")
+        self.botao_gerar_excel_parcelamento.pack(side="left", padx=(8, 0))
+        self.botao_gerar_pdf_parcelamento.pack(side="left", padx=(8, 0))
 
         messagebox.showinfo(
             "AuditaDAE",
