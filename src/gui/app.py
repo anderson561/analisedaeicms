@@ -35,6 +35,7 @@ from src.reports.report_generator import (
     gerar_relatorio_parcelamento_excel,
     gerar_relatorio_parcelamento_pdf,
 )
+from src import updater
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -72,6 +73,10 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
 
         self._montar_layout()
         self._atualizar_historico()
+
+        if updater.is_frozen():
+            self.after(500, self._limpar_atualizacao_antiga)
+            self.after(1500, self._verificar_atualizacoes)
 
     def _montar_layout(self) -> None:
         self.tabview = ctk.CTkTabview(self)
@@ -1012,6 +1017,83 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         for registro in registros:
             linha = f"{registro.data_processamento:%d/%m/%Y %H:%M} — NF {registro.numero_nf} — {registro.status}\n"
             self.texto_historico.insert("end", linha)
+
+    def _limpar_atualizacao_antiga(self) -> None:
+        try:
+            updater.limpar_instalacao_antiga()
+        except OSError:
+            pass
+
+    def _verificar_atualizacoes(self) -> None:
+        threading.Thread(target=self._verificar_atualizacoes_em_background, daemon=True).start()
+
+    def _verificar_atualizacoes_em_background(self) -> None:
+        try:
+            atualizacao = updater.verificar_atualizacao_disponivel()
+            self.after(0, self._atualizacao_verificada, atualizacao, None)
+        except Exception as erro:
+            self.after(0, self._atualizacao_verificada, None, erro)
+
+    def _atualizacao_verificada(
+        self,
+        atualizacao: updater.AtualizacaoDisponivel | None,
+        erro: Exception | None,
+    ) -> None:
+        if erro is not None:
+            messagebox.showwarning(
+                "AuditaDAE", f"Não foi possível verificar se há atualizações disponíveis.\n\n{erro}"
+            )
+            return
+
+        if atualizacao is None:
+            return
+
+        if not updater.pode_atualizar_automaticamente():
+            messagebox.showinfo(
+                "AuditaDAE",
+                f"Uma nova versão ({atualizacao.versao_nova}) está disponível, mas a pasta de "
+                "instalação atual não tem permissão de escrita — não é possível atualizar "
+                "automaticamente. Baixe a nova versão manualmente.",
+            )
+            return
+
+        deseja_baixar = messagebox.askyesno(
+            "AuditaDAE — Atualização disponível",
+            f"Uma nova versão ({atualizacao.versao_nova}) está disponível.\n\n"
+            f"{atualizacao.notas}\n\nDeseja baixar e instalar agora?",
+        )
+        if not deseja_baixar:
+            return
+
+        self.barra_progresso.start()
+        threading.Thread(
+            target=self._baixar_atualizacao_em_background, args=(atualizacao,), daemon=True
+        ).start()
+
+    def _baixar_atualizacao_em_background(self, atualizacao: updater.AtualizacaoDisponivel) -> None:
+        try:
+            staging_pai = updater.preparar_staging()
+            staging_novo = updater.baixar_e_extrair(atualizacao.url_download, staging_pai)
+            self.after(0, self._atualizacao_pronta, staging_novo, None)
+        except Exception as erro:
+            self.after(0, self._atualizacao_pronta, None, erro)
+
+    def _atualizacao_pronta(self, staging_novo: Path | None, erro: Exception | None) -> None:
+        self.barra_progresso.stop()
+
+        if erro is not None:
+            messagebox.showwarning("AuditaDAE", f"Falha ao baixar a atualização.\n\n{erro}")
+            return
+
+        deseja_reiniciar = messagebox.askokcancel(
+            "AuditaDAE — Atualização pronta",
+            "A atualização foi baixada. O AuditaDAE será fechado e reaberto na nova versão.",
+        )
+        if not deseja_reiniciar:
+            return
+
+        updater.aplicar_atualizacao(staging_novo)
+        self.destroy()
 
 
 def main() -> None:

@@ -9,12 +9,16 @@ datas += collect_data_files("tkinterdnd2")
 
 # Pacote minimo do Tesseract (tesseract.exe + DLLs + tessdata/por.traineddata),
 # preparado por build.bat em vendor/tesseract/ antes de invocar o PyInstaller.
-# Fica em uma subpasta "tesseract/" ao lado do AuditaDAE.exe no onedir final;
+# Fica em _internal/tesseract/ no onedir final (nao ao lado do AuditaDAE.exe);
 # ver src/ocr/tesseract_setup.py para a resolucao do caminho em tempo de execucao.
 vendor_tesseract = Path("vendor/tesseract")
 binaries = [(str(p), "tesseract") for p in vendor_tesseract.glob("*.exe")]
 binaries += [(str(p), "tesseract") for p in vendor_tesseract.glob("*.dll")]
 datas += [(str(p), "tesseract/tessdata") for p in (vendor_tesseract / "tessdata").glob("*.traineddata")]
+
+# Script auxiliar do auto-update (troca a instalacao e relanca o app enquanto
+# o processo antigo ja encerrou); ver src/updater.py.
+datas += [("src/updater_helper.bat", ".")]
 
 a = Analysis(
     ["run_app.py"],
