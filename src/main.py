@@ -2,21 +2,28 @@ from pathlib import Path
 
 from src.db.database import obter_conexao
 from src.db.repository import salvar_conciliacao, salvar_dae
+from src.engine.comparador_pagamentos_notas import agrupar_notas_por_documento, comparar_com_entradas
 from src.engine.conciliador import conciliar, filtrar_conciliadas_com_dados
 from src.engine.verificador_pagamento import verificar_pagamentos
 from src.engine.verificador_parcelamento import verificar_parcelamento, verificar_parcelamento_por_valor
 from src.extractors.classificador_planilha import classificar_abas
 from src.extractors.dae_extractor import extrair_dae
+from src.extractors.entradas_icms_extractor import extrair_entradas_icms
 from src.extractors.icms_at_extractor import extrair_icms_at
+from src.extractors.lista_notas_extractor import extrair_itens_notas
 from src.extractors.pagamento_extractor import extrair_pagamentos
 from src.extractors.pagamento_planilha_extractor import extrair_pagamentos_e_parcelamento_de_planilha
 from src.extractors.parcelamento_extractor import extrair_parcelamento
+from src.extractors.relatorio_conciliado_extractor import extrair_notas_relatorio_conciliado
 from src.extractors.relatorio_extractor import ler_relatorio
 from src.models.dae_models import (
     DaeDocumento,
     DaeParceladoEncontrado,
     DaeParceladoNaoEncontrado,
     DaePagamentoNaoLocalizado,
+    NotaConciliada,
+    NotaFiscalComparada,
+    NotaNaoEncontrada,
     PagamentoConfirmado,
     ResultadoProcessamento,
 )
@@ -111,3 +118,22 @@ def verificar_parcelamento_lote(
         linha for caminho in caminhos_parcelamento for linha in extrair_parcelamento(caminho)
     ]
     return verificar_parcelamento(daes, linhas_parcelamento)
+
+
+def verificar_pagamentos_notas_lote(
+    caminhos_entradas: list[str],
+    caminhos_notas: list[str],
+) -> tuple[list[NotaFiscalComparada], list[NotaFiscalComparada], list[NotaFiscalComparada]]:
+    linhas_entrada = [linha for caminho in caminhos_entradas for linha in extrair_entradas_icms(caminho)]
+    itens_notas = [item for caminho in caminhos_notas for item in extrair_itens_notas(caminho)]
+    agrupado = agrupar_notas_por_documento(itens_notas)
+    return comparar_com_entradas(agrupado, linhas_entrada)
+
+
+def conciliar_relatorio_com_daes_lote(
+    caminhos_dae: list[str], caminho_relatorio: str
+) -> tuple[list[NotaConciliada], list[NotaNaoEncontrada]]:
+    daes = _extrair_daes(caminhos_dae)
+    notas = extrair_notas_relatorio_conciliado(caminho_relatorio)
+    conciliadas, nao_encontradas = conciliar(daes, notas)
+    return conciliadas, nao_encontradas

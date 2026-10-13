@@ -55,7 +55,7 @@ def test_gerar_relatorio_parcelamento_excel_contem_as_duas_abas_agrupadas_por_an
     aba_encontrados = workbook["Encontrados"]
     valores_encontrados = [[c.value for c in linha] for linha in aba_encontrados.iter_rows()]
     assert valores_encontrados[0][0] == "Ano 2019"
-    assert valores_encontrados[1][0] == "Mês 07"
+    assert valores_encontrados[1][0] == "Julho"
     assert valores_encontrados[2][0] == "Arquivo DAE"
     assert valores_encontrados[3][0] == "Macedo DAE 07.02.004 07-2019.pdf"
     linha_2019 = valores_encontrados[3]
@@ -65,13 +65,13 @@ def test_gerar_relatorio_parcelamento_excel_contem_as_duas_abas_agrupadas_por_an
     assert linha_2019[4] == 1009.63
     assert linha_2019[5] == 1009.63
     assert valores_encontrados[5][0] == "Ano 2022"
-    assert valores_encontrados[6][0] == "Mês 09"
+    assert valores_encontrados[6][0] == "Setembro"
     assert valores_encontrados[8][0] == "Macedo DAE 07.02.004 09-2022.pdf"
 
     aba_nao_encontrados = workbook["Não Encontrados"]
     valores_nao_encontrados = [[c.value for c in linha] for linha in aba_nao_encontrados.iter_rows()]
     assert valores_nao_encontrados[0][0] == "Ano 2022"
-    assert valores_nao_encontrados[1][0] == "Mês 09"
+    assert valores_nao_encontrados[1][0] == "Setembro"
     linha_nao_encontrada = valores_nao_encontrados[3]
     assert linha_nao_encontrada[0] == "Macedo DAE 1145 09-2022.pdf"
     assert linha_nao_encontrada[1] == "1145"
@@ -133,7 +133,7 @@ def test_gerar_relatorio_parcelamento_pdf_contem_as_duas_secoes_agrupadas_por_an
     assert "Macedo DAE 1145 09-2022.pdf" in texto
     assert "999.99" in texto
     assert "Ano 2019" in texto
-    assert "Mês 07" in texto
+    assert "Julho" in texto
 
 
 def test_gerar_relatorio_parcelamento_pdf_listas_vazias(tmp_path):

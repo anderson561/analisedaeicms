@@ -90,3 +90,29 @@ def test_filtrar_conciliadas_com_dados_mantem_nota_com_valor_principal_zero():
 
 def test_filtrar_conciliadas_com_dados_lista_vazia():
     assert filtrar_conciliadas_com_dados([]) == []
+
+
+def test_conciliada_traz_nome_do_arquivo_do_dae():
+    dae = DaeDocumento(arquivo_origem=r"C:\pasta\DAE 01.pdf", codigo_receita="1145", notas_fiscais=["1020"])
+
+    conciliadas, _ = conciliar([dae], [LinhaRelatorio(numero_nf="1020")])
+
+    assert conciliadas[0].dae_arquivo_origem == "DAE 01.pdf"
+
+
+def test_nao_encontrada_propaga_ano_e_mes_do_relatorio():
+    mapa = [LinhaRelatorio(numero_nf="9999", dados_originais={"Ano": "2021", "Mês": "10"})]
+
+    _, nao_encontradas = conciliar([], mapa)
+
+    assert nao_encontradas[0].ano == 2021
+    assert nao_encontradas[0].mes == 10
+
+
+def test_nao_encontrada_ignora_ano_mes_invalidos():
+    mapa = [LinhaRelatorio(numero_nf="9999", dados_originais={"Ano": "abc", "Mês": ""})]
+
+    _, nao_encontradas = conciliar([], mapa)
+
+    assert nao_encontradas[0].ano is None
+    assert nao_encontradas[0].mes is None

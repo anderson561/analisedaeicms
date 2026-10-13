@@ -83,12 +83,12 @@ def test_gerar_relatorio_pagamentos_excel_contem_as_duas_abas_agrupadas_por_ano_
     aba_confirmados = workbook["Confirmados"]
     valores_confirmados = [[c.value for c in linha] for linha in aba_confirmados.iter_rows()]
     assert valores_confirmados[0][0] == "Ano 2021"
-    assert valores_confirmados[1][0] == "Mês 01"
+    assert valores_confirmados[1][0] == "Janeiro"
     assert valores_confirmados[2][0] == "Nosso Número"
     assert valores_confirmados[3][0] == "2100000001"
     assert valores_confirmados[4][0] is None
     assert valores_confirmados[5][0] == "Ano 2022"
-    assert valores_confirmados[6][0] == "Mês 01"
+    assert valores_confirmados[6][0] == "Janeiro"
     assert valores_confirmados[8][0] == "2113874976"
     linha_2022_01 = valores_confirmados[8]
     assert linha_2022_01[1] == "25/02/2022"
@@ -96,23 +96,23 @@ def test_gerar_relatorio_pagamentos_excel_contem_as_duas_abas_agrupadas_por_ano_
     assert linha_2022_01[3] == "1145 - ICMS ANTECIPAÇÃO TRIBUTÁRIA"
     assert linha_2022_01[4] == 852.93
     assert linha_2022_01[5] == 852.93
-    assert valores_confirmados[10][0] == "Mês 09"
+    assert valores_confirmados[10][0] == "Setembro"
     assert valores_confirmados[12][0] == "2113900002"
 
     aba_nao_localizados = workbook["Não Localizados"]
     valores_nao_localizados = [[c.value for c in linha] for linha in aba_nao_localizados.iter_rows()]
     assert valores_nao_localizados[0][0] == "Ano 2021"
-    assert valores_nao_localizados[1][0] == "Mês 05"
+    assert valores_nao_localizados[1][0] == "Maio"
     assert valores_nao_localizados[3][0] == "Macedo DAE 2175 05-2021.pdf"
     assert valores_nao_localizados[5][0] == "Ano 2022"
-    assert valores_nao_localizados[6][0] == "Mês 05"
+    assert valores_nao_localizados[6][0] == "Maio"
     linha_nao_localizados_2022_05 = valores_nao_localizados[8]
     assert linha_nao_localizados_2022_05[0] == "Macedo DAE 2175 05-2022.pdf"
     assert linha_nao_localizados_2022_05[1] == "2175"
     assert linha_nao_localizados_2022_05[2] == "05/2022"
     assert linha_nao_localizados_2022_05[3] == 784.01
     assert linha_nao_localizados_2022_05[4] == "Não Localizada no Relatório de Pagamentos"
-    assert valores_nao_localizados[10][0] == "Mês 09"
+    assert valores_nao_localizados[10][0] == "Setembro"
     assert valores_nao_localizados[12][0] == "Macedo DAE 1145 09-2022.pdf"
 
 
@@ -211,8 +211,8 @@ def test_gerar_relatorio_pagamentos_pdf_contem_as_duas_secoes_agrupadas_por_ano_
     ano_2022_confirmados = texto.index("Ano 2022", secao_confirmados)
     assert secao_confirmados < ano_2021_confirmados < ano_2022_confirmados < secao_nao_localizados
 
-    mes_05_confirmados = texto.index("Mês 05", ano_2022_confirmados)
-    mes_09_confirmados = texto.index("Mês 09", ano_2022_confirmados)
+    mes_05_confirmados = texto.index("Maio", ano_2022_confirmados)
+    mes_09_confirmados = texto.index("Setembro", ano_2022_confirmados)
     assert ano_2022_confirmados < mes_05_confirmados < mes_09_confirmados < secao_nao_localizados
 
 

@@ -9,7 +9,9 @@ import xlrd
 from src.extractors.mapa_extractor import eh_mapa_aquisicao, extrair_notas_mapa_aquisicao
 from src.models.dae_models import LinhaRelatorio
 
-PADRAO_COLUNA_NF = re.compile(r"n[uú]mero.*nota|n[ºo°]?\s*nf|nota\s*fiscal|^nf$", re.IGNORECASE)
+PADRAO_COLUNA_NF = re.compile(
+    r"n[uú]mero.*(nota|documento)|n[ºo°]?\s*nf|nota\s*fiscal|^nf$|^nota$|^documento$", re.IGNORECASE
+)
 
 
 def detectar_coluna_nf(cabecalho: list[str]) -> str | None:
