@@ -16,6 +16,7 @@ from src.models.dae_models import (
     DaePagamentoNaoLocalizado,
     LinhaIcmsAt,
     NotaConciliada,
+    NotaFiscalComparada,
     NotaNaoEncontrada,
     PagamentoConfirmado,
 )
@@ -28,6 +29,7 @@ COLUNAS_CONCILIADAS = [
     "Referência",
     "Valor Principal (R$)",
     "Especificação da Receita",
+    "Arquivo do DAE",
     "Status",
 ]
 
@@ -78,6 +80,22 @@ COLUNAS_ICMS_AT = [
     "Valor a Recolher (R$)",
 ]
 
+COLUNAS_PAGAMENTOS_NOTAS = [
+    "Número do Documento",
+    "Descrição",
+    "Valor Notas (R$)",
+    "Valor Entrada (R$)",
+    "Diferença (R$)",
+    "Fornecedor",
+]
+
+COLUNAS_NOTAS_NAO_ENCONTRADAS = [
+    "Número do Documento",
+    "Descrição",
+    "Valor Notas (R$)",
+    "Status",
+]
+
 
 PADRAO_REFERENCIA_COMPLETA = re.compile(r"^\s*(\d{1,2})/(\d{4})\s*$")
 PADRAO_DATA_ISO = re.compile(r"^(\d{4})-(\d{2})-\d{2}")
@@ -108,8 +126,26 @@ def _titulo_ano(ano: int | None) -> str:
     return f"Ano {ano}" if ano is not None else "Sem Ano Identificado"
 
 
+NOMES_MESES = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+]
+
+
 def _titulo_mes(mes: int | None) -> str:
-    return f"Mês {mes:02d}" if mes is not None else "Sem Mês Identificado"
+    if mes is None or not 1 <= mes <= 12:
+        return "Sem Mês Identificado"
+    return NOMES_MESES[mes - 1]
 
 
 def _agrupar_por_ano_mes(
@@ -171,7 +207,13 @@ def _linhas_bloco_mesclado(
 
 
 def _chave_dae_conciliada(nota: NotaConciliada) -> tuple:
-    return (nota.codigo_receita, nota.referencia, nota.valor_principal, nota.especificacao_receita)
+    return (
+        nota.codigo_receita,
+        nota.referencia,
+        nota.valor_principal,
+        nota.especificacao_receita,
+        nota.dae_arquivo_origem,
+    )
 
 
 def _agrupar_conciliadas_por_dae(itens: list[NotaConciliada]) -> list[list[NotaConciliada]]:
@@ -202,6 +244,7 @@ def _linha_conciliada_excel(nota: NotaConciliada) -> list:
         nota.referencia,
         nota.valor_principal,
         nota.especificacao_receita,
+        nota.dae_arquivo_origem,
         f"🟢 {nota.status}",
     ]
 
@@ -227,11 +270,11 @@ def _escrever_conciliadas_agrupadas(
             planilha.append(COLUNAS_CONCILIADAS)
             for bloco in _agrupar_conciliadas_por_dae(itens):
                 linha_inicio = planilha.max_row + 1
-                for linha in _linhas_bloco_mesclado(bloco, _linha_conciliada_excel, (1, 2, 3, 4, 5)):
+                for linha in _linhas_bloco_mesclado(bloco, _linha_conciliada_excel, (1, 2, 3, 4, 5, 6)):
                     planilha.append(linha)
                 linha_fim = planilha.max_row
                 if linha_fim > linha_inicio:
-                    for coluna in range(2, 7):
+                    for coluna in range(2, 8):
                         planilha.merge_cells(
                             start_row=linha_inicio, start_column=coluna, end_row=linha_fim, end_column=coluna
                         )
@@ -276,6 +319,7 @@ def _linha_conciliada_pdf(nota: NotaConciliada) -> list:
         nota.referencia or "",
         f"{nota.valor_principal:.2f}" if nota.valor_principal is not None else "",
         nota.especificacao_receita or "",
+        nota.dae_arquivo_origem or "",
         nota.status,
     ]
 
@@ -294,10 +338,10 @@ def _elementos_conciliadas_agrupadas(
             comandos_extra = []
             for bloco in _agrupar_conciliadas_por_dae(itens):
                 linha_inicio = len(dados)
-                dados.extend(_linhas_bloco_mesclado(bloco, _linha_conciliada_pdf, (1, 2, 3, 4, 5), valor_branco=""))
+                dados.extend(_linhas_bloco_mesclado(bloco, _linha_conciliada_pdf, (1, 2, 3, 4, 5, 6), valor_branco=""))
                 linha_fim = len(dados) - 1
                 if linha_fim > linha_inicio:
-                    for coluna in range(1, 6):
+                    for coluna in range(1, 7):
                         comandos_extra.append(("SPAN", (coluna, linha_inicio), (coluna, linha_fim)))
             elementos.append(_tabela_relatorio(dados, "#1f6f43", comandos_extra))
             elementos.append(Spacer(1, 8))
@@ -323,6 +367,12 @@ def gerar_relatorio_conciliadas_pdf(conciliadas: list[NotaConciliada], caminho: 
     return caminho
 
 
+def _ano_mes_nao_encontrada(nota: NotaNaoEncontrada) -> tuple[int, int] | None:
+    if nota.ano is not None and nota.mes is not None:
+        return nota.ano, nota.mes
+    return _ano_mes_da_data_emissao(nota.data_emissao)
+
+
 def gerar_relatorio_nao_encontradas_pdf(nao_encontradas: list[NotaNaoEncontrada], caminho: Path) -> Path:
     documento = SimpleDocTemplate(
         str(caminho),
@@ -336,7 +386,7 @@ def gerar_relatorio_nao_encontradas_pdf(nao_encontradas: list[NotaNaoEncontrada]
         Spacer(1, 12),
     ]
 
-    grupos = _agrupar_por_ano_mes(nao_encontradas, lambda n: _ano_mes_da_data_emissao(n.data_emissao))
+    grupos = _agrupar_por_ano_mes(nao_encontradas, _ano_mes_nao_encontrada)
     elementos.extend(
         _elementos_por_ano_mes(
             estilos,
@@ -360,7 +410,7 @@ def gerar_relatorio_nao_encontradas_pdf(nao_encontradas: list[NotaNaoEncontrada]
 def gerar_relatorio_nao_encontradas(nao_encontradas: list[NotaNaoEncontrada], caminho: Path) -> Path:
     workbook = Workbook()
     planilha = workbook.active
-    grupos = _agrupar_por_ano_mes(nao_encontradas, lambda n: _ano_mes_da_data_emissao(n.data_emissao))
+    grupos = _agrupar_por_ano_mes(nao_encontradas, _ano_mes_nao_encontrada)
     _escrever_planilha_por_ano_mes(
         planilha,
         COLUNAS_NAO_ENCONTRADAS,
@@ -670,6 +720,104 @@ def gerar_relatorio_parcelamento_pdf(
             "Heading4",
         )
     )
+
+    documento.build(elementos)
+    return caminho
+
+
+def _linha_nota_comparada_excel(nota: NotaFiscalComparada) -> list:
+    return [
+        nota.nota,
+        nota.descricao,
+        nota.valor_notas,
+        nota.valor_entrada,
+        nota.diferenca,
+        nota.fornecedor,
+    ]
+
+
+def _linha_nota_nao_encontrada_excel(nota: NotaFiscalComparada) -> list:
+    return [nota.nota, nota.descricao, nota.valor_notas, nota.status]
+
+
+def gerar_relatorio_pagamentos_notas_excel(
+    iguais: list[NotaFiscalComparada],
+    diferentes: list[NotaFiscalComparada],
+    nao_encontradas: list[NotaFiscalComparada],
+    caminho: Path,
+) -> Path:
+    workbook = Workbook()
+
+    aba_iguais = workbook.active
+    aba_iguais.title = "Valores Iguais"
+    grupos_iguais = _agrupar_por_ano_mes(iguais, lambda n: (n.ano, n.mes))
+    _escrever_planilha_por_ano_mes(aba_iguais, COLUNAS_PAGAMENTOS_NOTAS, grupos_iguais, _linha_nota_comparada_excel)
+
+    aba_diferentes = workbook.create_sheet("Valores Diferentes")
+    grupos_diferentes = _agrupar_por_ano_mes(diferentes, lambda n: (n.ano, n.mes))
+    _escrever_planilha_por_ano_mes(
+        aba_diferentes, COLUNAS_PAGAMENTOS_NOTAS, grupos_diferentes, _linha_nota_comparada_excel
+    )
+
+    aba_nao_encontradas = workbook.create_sheet("Notas Não Encontradas")
+    grupos_nao_encontradas = _agrupar_por_ano_mes(nao_encontradas, lambda n: (n.ano, n.mes))
+    _escrever_planilha_por_ano_mes(
+        aba_nao_encontradas, COLUNAS_NOTAS_NAO_ENCONTRADAS, grupos_nao_encontradas, _linha_nota_nao_encontrada_excel
+    )
+
+    workbook.save(str(caminho))
+    return caminho
+
+
+def _linha_nota_comparada_pdf(nota: NotaFiscalComparada) -> list:
+    return [
+        nota.nota,
+        nota.descricao,
+        f"{nota.valor_notas:.2f}",
+        f"{nota.valor_entrada:.2f}" if nota.valor_entrada is not None else "",
+        f"{nota.diferenca:.2f}" if nota.diferenca is not None else "",
+        nota.fornecedor or "",
+    ]
+
+
+def _linha_nota_nao_encontrada_pdf(nota: NotaFiscalComparada) -> list:
+    return [nota.nota, nota.descricao, f"{nota.valor_notas:.2f}", nota.status]
+
+
+def gerar_relatorio_pagamentos_notas_pdf(
+    iguais: list[NotaFiscalComparada],
+    diferentes: list[NotaFiscalComparada],
+    nao_encontradas: list[NotaFiscalComparada],
+    caminho: Path,
+) -> Path:
+    documento = SimpleDocTemplate(
+        str(caminho),
+        pagesize=landscape(A4),
+        title="AuditaDAE - Relatorio de Pagamentos x Notas",
+    )
+    estilos = getSampleStyleSheet()
+    elementos = [
+        Paragraph("AuditaDAE — Relatório de Pagamentos x Notas", estilos["Title"]),
+        Paragraph(f"Gerado em {datetime.now():%d/%m/%Y %H:%M}", estilos["Normal"]),
+        Spacer(1, 12),
+    ]
+
+    secoes = [
+        ("Valores Iguais", iguais, COLUNAS_PAGAMENTOS_NOTAS, _linha_nota_comparada_pdf, "#1f6f43"),
+        ("Valores Diferentes", diferentes, COLUNAS_PAGAMENTOS_NOTAS, _linha_nota_comparada_pdf, "#b45f06"),
+        (
+            "Notas Não Encontradas nas Entradas",
+            nao_encontradas,
+            COLUNAS_NOTAS_NAO_ENCONTRADAS,
+            _linha_nota_nao_encontrada_pdf,
+            "#8f1f1f",
+        ),
+    ]
+    for titulo, itens, colunas, linha_de, cor in secoes:
+        elementos.append(Paragraph(titulo, estilos["Heading2"]))
+        grupos = _agrupar_por_ano_mes(itens, lambda n: (n.ano, n.mes))
+        elementos.extend(_elementos_por_ano_mes(estilos, colunas, grupos, linha_de, cor, "Heading3", "Heading4"))
+        elementos.append(Spacer(1, 12))
 
     documento.build(elementos)
     return caminho

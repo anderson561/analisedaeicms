@@ -8,9 +8,11 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from src.db.database import obter_conexao
 from src.db.repository import listar_historico
 from src.main import (
+    conciliar_relatorio_com_daes_lote,
     detectar_fontes_relatorio,
     processar_lote,
     verificar_pagamentos_lote,
+    verificar_pagamentos_notas_lote,
     verificar_parcelamento_lote,
 )
 from src.models.dae_models import (
@@ -19,6 +21,7 @@ from src.models.dae_models import (
     DaePagamentoNaoLocalizado,
     LinhaIcmsAt,
     NotaConciliada,
+    NotaFiscalComparada,
     NotaNaoEncontrada,
     PagamentoConfirmado,
     ResultadoProcessamento,
@@ -31,6 +34,8 @@ from src.reports.report_generator import (
     gerar_relatorio_nao_encontradas,
     gerar_relatorio_nao_encontradas_pdf,
     gerar_relatorio_pagamentos_excel,
+    gerar_relatorio_pagamentos_notas_excel,
+    gerar_relatorio_pagamentos_notas_pdf,
     gerar_relatorio_pagamentos_pdf,
     gerar_relatorio_parcelamento_excel,
     gerar_relatorio_parcelamento_pdf,
@@ -70,6 +75,15 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.caminhos_parcelamento: list[str] = []
         self.ultimos_parcelamento_encontrados: list[DaeParceladoEncontrado] = []
         self.ultimos_parcelamento_nao_encontrados: list[DaeParceladoNaoEncontrado] = []
+        self.caminhos_entradas_pagamentos_notas: list[str] = []
+        self.caminhos_notas_pagamentos_notas: list[str] = []
+        self.ultimas_notas_iguais: list[NotaFiscalComparada] = []
+        self.ultimas_notas_diferentes: list[NotaFiscalComparada] = []
+        self.ultimas_notas_nao_encontradas: list[NotaFiscalComparada] = []
+        self.caminhos_dae_conc_dae: list[str] = []
+        self.caminho_relatorio_conc_dae: str | None = None
+        self.ultimas_conciliadas_conc_dae: list[NotaConciliada] = []
+        self.ultimas_nao_encontradas_conc_dae: list[NotaNaoEncontrada] = []
 
         self._montar_layout()
         self._atualizar_historico()
@@ -85,10 +99,14 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         aba_notas = self.tabview.add("Notas")
         aba_pagamentos = self.tabview.add("Pagamentos")
         aba_parcelamento = self.tabview.add("Parcelamento")
+        aba_pagamentos_notas = self.tabview.add("Pagamentos Notas")
+        aba_conciliacao_dae = self.tabview.add("Conciliação vs DAE")
 
         self._montar_aba_notas(aba_notas)
         self._montar_aba_pagamentos(aba_pagamentos)
         self._montar_aba_parcelamento(aba_parcelamento)
+        self._montar_aba_pagamentos_notas(aba_pagamentos_notas)
+        self._montar_aba_conciliacao_dae(aba_conciliacao_dae)
 
         self.barra_progresso = ctk.CTkProgressBar(self, mode="indeterminate")
         self.barra_progresso.pack(fill="x", padx=16, pady=8)
@@ -324,6 +342,124 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             command=self._gerar_pdf_parcelamento,
         )
 
+    def _montar_aba_pagamentos_notas(self, aba) -> None:
+        frame_entradas_pn = ctk.CTkFrame(aba)
+        frame_entradas_pn.pack(fill="x", padx=8, pady=(8, 8))
+        ctk.CTkLabel(
+            frame_entradas_pn,
+            text="Relatório(s) de Entradas (PDF) — solte 1 ou mais arquivos aqui ou selecione",
+        ).pack(anchor="w", padx=8, pady=(8, 0))
+        self.lista_entradas_pn = ctk.CTkTextbox(frame_entradas_pn, height=90)
+        self.lista_entradas_pn.pack(fill="x", padx=8, pady=8)
+        self.lista_entradas_pn.drop_target_register(DND_FILES)
+        self.lista_entradas_pn.dnd_bind("<<Drop>>", self._on_drop_entradas_pn)
+        ctk.CTkButton(
+            frame_entradas_pn,
+            text="Selecionar Relatório(s) de Entradas",
+            command=self._selecionar_entradas_pn,
+        ).pack(padx=8, pady=(0, 8), anchor="w")
+
+        frame_notas_pn = ctk.CTkFrame(aba)
+        frame_notas_pn.pack(fill="x", padx=8, pady=8)
+        ctk.CTkLabel(
+            frame_notas_pn,
+            text="Relatório(s) de Notas Fiscais (PDF) — solte 1 ou mais arquivos aqui ou selecione",
+        ).pack(anchor="w", padx=8, pady=(8, 0))
+        self.lista_notas_pn = ctk.CTkTextbox(frame_notas_pn, height=90)
+        self.lista_notas_pn.pack(fill="x", padx=8, pady=8)
+        self.lista_notas_pn.drop_target_register(DND_FILES)
+        self.lista_notas_pn.dnd_bind("<<Drop>>", self._on_drop_notas_pn)
+        ctk.CTkButton(
+            frame_notas_pn,
+            text="Selecionar Relatório(s) de Notas Fiscais",
+            command=self._selecionar_notas_pn,
+        ).pack(padx=8, pady=(0, 8), anchor="w")
+
+        frame_acoes_pagamentos_notas = ctk.CTkFrame(aba, fg_color="transparent")
+        frame_acoes_pagamentos_notas.pack(fill="x", padx=8, pady=(0, 8))
+
+        self.botao_verificar_pagamentos_notas = ctk.CTkButton(
+            frame_acoes_pagamentos_notas,
+            text="Verificar Pagamentos x Notas",
+            command=self._verificar_pagamentos_notas,
+            state="disabled",
+        )
+        self.botao_verificar_pagamentos_notas.pack(side="left")
+
+        # Só aparecem (pack) depois de "Verificar Pagamentos x Notas" concluir com sucesso.
+        self.botao_gerar_excel_pagamentos_notas = ctk.CTkButton(
+            frame_acoes_pagamentos_notas,
+            text="Gerar Relatório Excel",
+            command=self._gerar_excel_pagamentos_notas,
+        )
+
+        self.botao_gerar_pdf_pagamentos_notas = ctk.CTkButton(
+            frame_acoes_pagamentos_notas,
+            text="Gerar Relatório PDF",
+            command=self._gerar_pdf_pagamentos_notas,
+        )
+
+    def _montar_aba_conciliacao_dae(self, aba) -> None:
+        frame_dae = ctk.CTkFrame(aba)
+        frame_dae.pack(fill="x", padx=8, pady=(8, 8))
+        ctk.CTkLabel(
+            frame_dae,
+            text="DAE(s) (PDF) — solte 1 ou mais arquivos aqui ou selecione",
+        ).pack(anchor="w", padx=8, pady=(8, 0))
+        self.lista_dae_conc_dae = ctk.CTkTextbox(frame_dae, height=90)
+        self.lista_dae_conc_dae.pack(fill="x", padx=8, pady=8)
+        self.lista_dae_conc_dae.drop_target_register(DND_FILES)
+        self.lista_dae_conc_dae.dnd_bind("<<Drop>>", self._on_drop_dae_conc_dae)
+        ctk.CTkButton(
+            frame_dae,
+            text="Selecionar DAE(s)",
+            command=self._selecionar_daes_conc_dae,
+        ).pack(padx=8, pady=(0, 8), anchor="w")
+
+        frame_relatorio = ctk.CTkFrame(aba)
+        frame_relatorio.pack(fill="x", padx=8, pady=8)
+        ctk.CTkLabel(
+            frame_relatorio,
+            text="Relatório já conciliado (Excel .xlsx) — solte o arquivo aqui ou selecione",
+        ).pack(anchor="w", padx=8, pady=(8, 0))
+        self.label_relatorio_conc_dae = ctk.CTkLabel(frame_relatorio, text="Nenhum arquivo selecionado", anchor="w")
+        self.label_relatorio_conc_dae.pack(fill="x", padx=8, pady=8)
+        self.label_relatorio_conc_dae.drop_target_register(DND_FILES)
+        self.label_relatorio_conc_dae.dnd_bind("<<Drop>>", self._on_drop_relatorio_conc_dae)
+        ctk.CTkButton(
+            frame_relatorio,
+            text="Selecionar Relatório Conciliado",
+            command=self._selecionar_relatorio_conc_dae,
+        ).pack(padx=8, pady=(0, 8), anchor="w")
+
+        frame_acoes = ctk.CTkFrame(aba, fg_color="transparent")
+        frame_acoes.pack(fill="x", padx=8, pady=(0, 8))
+
+        self.botao_conciliar_conc_dae = ctk.CTkButton(
+            frame_acoes,
+            text="Conciliar com DAE",
+            command=self._conciliar_conc_dae,
+            state="disabled",
+        )
+        self.botao_conciliar_conc_dae.pack(side="left")
+
+        frame_relatorios = ctk.CTkFrame(aba, fg_color="transparent", height=0)
+        frame_relatorios.pack(fill="x", padx=8, pady=(0, 8))
+
+        # Só aparecem (pack) depois de "Conciliar com DAE" concluir com sucesso.
+        self.botao_excel_encontradas_conc_dae = ctk.CTkButton(
+            frame_relatorios, text="Excel Encontradas", command=self._gerar_excel_encontradas_conc_dae
+        )
+        self.botao_pdf_encontradas_conc_dae = ctk.CTkButton(
+            frame_relatorios, text="PDF Encontradas", command=self._gerar_pdf_encontradas_conc_dae
+        )
+        self.botao_excel_nao_encontradas_conc_dae = ctk.CTkButton(
+            frame_relatorios, text="Excel Não Encontradas", command=self._gerar_excel_nao_encontradas_conc_dae
+        )
+        self.botao_pdf_nao_encontradas_conc_dae = ctk.CTkButton(
+            frame_relatorios, text="PDF Não Encontradas", command=self._gerar_pdf_nao_encontradas_conc_dae
+        )
+
     def _on_drop_dae(self, evento) -> None:
         caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
         self.caminhos_dae.extend(caminhos)
@@ -394,6 +530,48 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
     def _atualizar_estado_botao_pagamentos(self) -> None:
         habilitado = bool(self.caminhos_dae_pagamentos) and bool(self.caminhos_relatorio_pagamento)
         self.botao_verificar_pagamentos.configure(state="normal" if habilitado else "disabled")
+
+    def _on_drop_entradas_pn(self, evento) -> None:
+        caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
+        self.caminhos_entradas_pagamentos_notas.extend(caminhos)
+        self._atualizar_lista_entradas_pn()
+        self._atualizar_estado_botao_pagamentos_notas()
+
+    def _selecionar_entradas_pn(self) -> None:
+        caminhos = filedialog.askopenfilenames(
+            title="Selecionar Relatório(s) de Entradas", filetypes=[("PDF", "*.pdf")]
+        )
+        if caminhos:
+            self.caminhos_entradas_pagamentos_notas.extend(caminhos)
+            self._atualizar_lista_entradas_pn()
+            self._atualizar_estado_botao_pagamentos_notas()
+
+    def _atualizar_lista_entradas_pn(self) -> None:
+        self.lista_entradas_pn.delete("1.0", "end")
+        self.lista_entradas_pn.insert("1.0", "\n".join(self.caminhos_entradas_pagamentos_notas))
+
+    def _on_drop_notas_pn(self, evento) -> None:
+        caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
+        self.caminhos_notas_pagamentos_notas.extend(caminhos)
+        self._atualizar_lista_notas_pn()
+        self._atualizar_estado_botao_pagamentos_notas()
+
+    def _selecionar_notas_pn(self) -> None:
+        caminhos = filedialog.askopenfilenames(
+            title="Selecionar Relatório(s) de Notas Fiscais", filetypes=[("PDF", "*.pdf")]
+        )
+        if caminhos:
+            self.caminhos_notas_pagamentos_notas.extend(caminhos)
+            self._atualizar_lista_notas_pn()
+            self._atualizar_estado_botao_pagamentos_notas()
+
+    def _atualizar_lista_notas_pn(self) -> None:
+        self.lista_notas_pn.delete("1.0", "end")
+        self.lista_notas_pn.insert("1.0", "\n".join(self.caminhos_notas_pagamentos_notas))
+
+    def _atualizar_estado_botao_pagamentos_notas(self) -> None:
+        habilitado = bool(self.caminhos_entradas_pagamentos_notas) and bool(self.caminhos_notas_pagamentos_notas)
+        self.botao_verificar_pagamentos_notas.configure(state="normal" if habilitado else "disabled")
 
     def _on_drop_dae_parcelamento(self, evento) -> None:
         caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
@@ -1005,6 +1183,246 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             return
 
         messagebox.showinfo("AuditaDAE", f"Relatório PDF gerado em:\n{caminho}")
+
+    def _verificar_pagamentos_notas(self) -> None:
+        if not self.caminhos_entradas_pagamentos_notas:
+            messagebox.showwarning("AuditaDAE", "Selecione ao menos um relatório de Entradas.")
+            return
+        if not self.caminhos_notas_pagamentos_notas:
+            messagebox.showwarning("AuditaDAE", "Selecione ao menos um relatório de Notas Fiscais.")
+            return
+
+        self.botao_verificar_pagamentos_notas.configure(state="disabled")
+        self.barra_progresso.start()
+        threading.Thread(target=self._verificar_pagamentos_notas_em_background, daemon=True).start()
+
+    def _verificar_pagamentos_notas_em_background(self) -> None:
+        try:
+            resultado = verificar_pagamentos_notas_lote(
+                self.caminhos_entradas_pagamentos_notas, self.caminhos_notas_pagamentos_notas
+            )
+            self.after(0, self._verificar_pagamentos_notas_concluido, resultado, None)
+        except Exception as erro:
+            self.after(0, self._verificar_pagamentos_notas_concluido, None, erro)
+
+    def _verificar_pagamentos_notas_concluido(
+        self,
+        resultado: tuple[list[NotaFiscalComparada], list[NotaFiscalComparada], list[NotaFiscalComparada]] | None,
+        erro: Exception | None,
+    ) -> None:
+        self.barra_progresso.stop()
+        self._atualizar_estado_botao_pagamentos_notas()
+        if erro is not None:
+            messagebox.showerror("AuditaDAE", f"Falha ao verificar pagamentos x notas: {erro}")
+            return
+
+        iguais, diferentes, nao_encontradas = resultado
+        self.ultimas_notas_iguais = iguais
+        self.ultimas_notas_diferentes = diferentes
+        self.ultimas_notas_nao_encontradas = nao_encontradas
+        self.botao_gerar_excel_pagamentos_notas.pack(side="left", padx=(8, 0))
+        self.botao_gerar_pdf_pagamentos_notas.pack(side="left", padx=(8, 0))
+
+        messagebox.showinfo(
+            "AuditaDAE",
+            f"Verificação concluída.\n\nValores iguais: {len(iguais)}\nValores diferentes: {len(diferentes)}\n"
+            f"Notas não encontradas: {len(nao_encontradas)}",
+        )
+
+    def _gerar_excel_pagamentos_notas(self) -> None:
+        if not (self.ultimas_notas_iguais or self.ultimas_notas_diferentes or self.ultimas_notas_nao_encontradas):
+            messagebox.showwarning("AuditaDAE", "Nenhum resultado de verificação para incluir na planilha.")
+            return
+
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar Relatório de Pagamentos x Notas Excel",
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx")],
+            initialfile="relatorio_pagamentos_notas.xlsx",
+        )
+        if not caminho:
+            return
+
+        try:
+            gerar_relatorio_pagamentos_notas_excel(
+                self.ultimas_notas_iguais,
+                self.ultimas_notas_diferentes,
+                self.ultimas_notas_nao_encontradas,
+                Path(caminho),
+            )
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar planilha: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório Excel gerado em:\n{caminho}")
+
+    def _gerar_pdf_pagamentos_notas(self) -> None:
+        if not (self.ultimas_notas_iguais or self.ultimas_notas_diferentes or self.ultimas_notas_nao_encontradas):
+            messagebox.showwarning("AuditaDAE", "Nenhum resultado de verificação para incluir no PDF.")
+            return
+
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar Relatório de Pagamentos x Notas PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile="relatorio_pagamentos_notas.pdf",
+        )
+        if not caminho:
+            return
+
+        try:
+            gerar_relatorio_pagamentos_notas_pdf(
+                self.ultimas_notas_iguais,
+                self.ultimas_notas_diferentes,
+                self.ultimas_notas_nao_encontradas,
+                Path(caminho),
+            )
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar PDF: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório PDF gerado em:\n{caminho}")
+
+    def _on_drop_dae_conc_dae(self, evento) -> None:
+        caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
+        self.caminhos_dae_conc_dae.extend(caminhos)
+        self._atualizar_lista_dae_conc_dae()
+        self._atualizar_estado_botao_conc_dae()
+
+    def _selecionar_daes_conc_dae(self) -> None:
+        caminhos = filedialog.askopenfilenames(title="Selecionar PDFs de DAE", filetypes=[("PDF", "*.pdf")])
+        if caminhos:
+            self.caminhos_dae_conc_dae.extend(caminhos)
+            self._atualizar_lista_dae_conc_dae()
+            self._atualizar_estado_botao_conc_dae()
+
+    def _atualizar_lista_dae_conc_dae(self) -> None:
+        self.lista_dae_conc_dae.delete("1.0", "end")
+        self.lista_dae_conc_dae.insert("1.0", "\n".join(self.caminhos_dae_conc_dae))
+
+    def _on_drop_relatorio_conc_dae(self, evento) -> None:
+        caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".xlsx")]
+        if caminhos:
+            self._definir_relatorio_conc_dae(caminhos[0])
+
+    def _selecionar_relatorio_conc_dae(self) -> None:
+        caminho = filedialog.askopenfilename(
+            title="Selecionar Relatório Conciliado", filetypes=[("Excel", "*.xlsx")]
+        )
+        if caminho:
+            self._definir_relatorio_conc_dae(caminho)
+
+    def _definir_relatorio_conc_dae(self, caminho: str) -> None:
+        self.caminho_relatorio_conc_dae = caminho
+        self.label_relatorio_conc_dae.configure(text=caminho)
+        self._atualizar_estado_botao_conc_dae()
+
+    def _atualizar_estado_botao_conc_dae(self) -> None:
+        habilitado = bool(self.caminhos_dae_conc_dae) and self.caminho_relatorio_conc_dae is not None
+        self.botao_conciliar_conc_dae.configure(state="normal" if habilitado else "disabled")
+
+    def _conciliar_conc_dae(self) -> None:
+        if not self.caminhos_dae_conc_dae:
+            messagebox.showwarning("AuditaDAE", "Selecione ao menos um DAE.")
+            return
+        if self.caminho_relatorio_conc_dae is None:
+            messagebox.showwarning("AuditaDAE", "Selecione o relatório já conciliado.")
+            return
+
+        self.botao_conciliar_conc_dae.configure(state="disabled")
+        self.barra_progresso.start()
+        threading.Thread(target=self._conciliar_conc_dae_em_background, daemon=True).start()
+
+    def _conciliar_conc_dae_em_background(self) -> None:
+        try:
+            resultado = conciliar_relatorio_com_daes_lote(self.caminhos_dae_conc_dae, self.caminho_relatorio_conc_dae)
+            self.after(0, self._conciliar_conc_dae_concluido, resultado, None)
+        except Exception as erro:
+            self.after(0, self._conciliar_conc_dae_concluido, None, erro)
+
+    def _conciliar_conc_dae_concluido(
+        self,
+        resultado: tuple[list[NotaConciliada], list[NotaNaoEncontrada]] | None,
+        erro: Exception | None,
+    ) -> None:
+        self.barra_progresso.stop()
+        self._atualizar_estado_botao_conc_dae()
+        if erro is not None:
+            messagebox.showerror("AuditaDAE", f"Falha ao conciliar o relatório com os DAEs: {erro}")
+            return
+
+        conciliadas, nao_encontradas = resultado
+        self.ultimas_conciliadas_conc_dae = conciliadas
+        self.ultimas_nao_encontradas_conc_dae = nao_encontradas
+        for botao in (
+            self.botao_excel_encontradas_conc_dae,
+            self.botao_pdf_encontradas_conc_dae,
+            self.botao_excel_nao_encontradas_conc_dae,
+            self.botao_pdf_nao_encontradas_conc_dae,
+        ):
+            botao.pack(side="left", padx=(0, 8))
+
+        messagebox.showinfo(
+            "AuditaDAE",
+            f"Conciliação concluída.\n\nNotas encontradas em DAE: {len(conciliadas)}\n"
+            f"Notas não encontradas em nenhum DAE: {len(nao_encontradas)}",
+        )
+
+    def _salvar_relatorio_conc_dae(self, dados: list, titulo: str, extensao: str, nome: str, gerador) -> None:
+        if not dados:
+            messagebox.showwarning("AuditaDAE", "Nenhuma nota para incluir neste relatório.")
+            return
+
+        tipo = ("Excel", "*.xlsx") if extensao == ".xlsx" else ("PDF", "*.pdf")
+        caminho = filedialog.asksaveasfilename(
+            title=titulo, defaultextension=extensao, filetypes=[tipo], initialfile=f"{nome}{extensao}"
+        )
+        if not caminho:
+            return
+
+        try:
+            gerador(dados, Path(caminho))
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar relatório: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório gerado em:\n{caminho}")
+
+    def _gerar_excel_encontradas_conc_dae(self) -> None:
+        self._salvar_relatorio_conc_dae(
+            self.ultimas_conciliadas_conc_dae,
+            "Salvar Relatório de Notas Encontradas nos DAEs (Excel)",
+            ".xlsx",
+            "notas_encontradas_nos_daes",
+            gerar_relatorio_conciliadas,
+        )
+
+    def _gerar_pdf_encontradas_conc_dae(self) -> None:
+        self._salvar_relatorio_conc_dae(
+            self.ultimas_conciliadas_conc_dae,
+            "Salvar Relatório de Notas Encontradas nos DAEs (PDF)",
+            ".pdf",
+            "notas_encontradas_nos_daes",
+            gerar_relatorio_conciliadas_pdf,
+        )
+
+    def _gerar_excel_nao_encontradas_conc_dae(self) -> None:
+        self._salvar_relatorio_conc_dae(
+            self.ultimas_nao_encontradas_conc_dae,
+            "Salvar Relatório de Notas Não Encontradas em DAE (Excel)",
+            ".xlsx",
+            "notas_nao_encontradas_em_dae",
+            gerar_relatorio_nao_encontradas,
+        )
+
+    def _gerar_pdf_nao_encontradas_conc_dae(self) -> None:
+        self._salvar_relatorio_conc_dae(
+            self.ultimas_nao_encontradas_conc_dae,
+            "Salvar Relatório de Notas Não Encontradas em DAE (PDF)",
+            ".pdf",
+            "notas_nao_encontradas_em_dae",
+            gerar_relatorio_nao_encontradas_pdf,
+        )
 
     def _atualizar_historico(self) -> None:
         conexao = obter_conexao()

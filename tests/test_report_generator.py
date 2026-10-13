@@ -62,8 +62,8 @@ def test_gerar_relatorio_conciliadas_pdf_contem_os_dados_agrupados_por_ano_e_mes
     assert "ICMS ST Antecipado" in texto
 
     ano_2025 = texto.index("Ano 2025")
-    mes_05 = texto.index("Mês 05")
-    mes_06 = texto.index("Mês 06")
+    mes_05 = texto.index("Maio")
+    mes_06 = texto.index("Junho")
     ano_2026 = texto.index("Ano 2026")
     assert ano_2025 < mes_05 < mes_06 < ano_2026
 
@@ -92,16 +92,16 @@ def test_gerar_relatorio_conciliadas_excel_agrupa_por_ano_e_mes(tmp_path):
     valores = [[c.value for c in linha] for linha in planilha.iter_rows()]
 
     assert valores[0][0] == "Ano 2025"
-    assert valores[1][0] == "Mês 05"
+    assert valores[1][0] == "Maio"
     assert valores[2][0] == "Número da NF"
     assert valores[3][0] == "1021"
     assert valores[4][0] is None
-    assert valores[5][0] == "Mês 06"
+    assert valores[5][0] == "Junho"
     assert valores[6][0] == "Número da NF"
     assert valores[7][0] == "1022"
     assert valores[8][0] is None
     assert valores[9][0] == "Ano 2026"
-    assert valores[10][0] == "Mês 05"
+    assert valores[10][0] == "Maio"
     assert valores[12][0] == "1020"
 
 
@@ -119,6 +119,7 @@ def test_gerar_relatorio_conciliadas_excel_lista_vazia(tmp_path):
         "Referência",
         "Valor Principal (R$)",
         "Especificação da Receita",
+        "Arquivo do DAE",
         "Status",
     ]
 
@@ -160,8 +161,8 @@ def test_gerar_relatorio_nao_encontradas_pdf_contem_os_dados_agrupados_por_ano_e
 
     ano_2025 = texto.index("Ano 2025")
     ano_2026 = texto.index("Ano 2026")
-    mes_05 = texto.index("Mês 05", ano_2026)
-    mes_06 = texto.index("Mês 06", ano_2026)
+    mes_05 = texto.index("Maio", ano_2026)
+    mes_06 = texto.index("Junho", ano_2026)
     assert ano_2025 < ano_2026 < mes_05 < mes_06
 
 
@@ -189,10 +190,10 @@ def test_gerar_relatorio_nao_encontradas_excel_agrupa_por_ano_e_mes(tmp_path):
     valores = [[c.value for c in linha] for linha in planilha.iter_rows()]
 
     assert valores[0][0] == "Ano 2025"
-    assert valores[1][0] == "Mês 05"
+    assert valores[1][0] == "Maio"
     assert valores[3][0] == "1032"
     assert valores[5][0] == "Ano 2026"
-    assert valores[6][0] == "Mês 05"
+    assert valores[6][0] == "Maio"
     assert valores[8][0] == "1030"
 
     ultimo_bloco_ano = [linha[0] for linha in valores].index("Sem Ano Identificado")
@@ -216,13 +217,21 @@ def test_gerar_relatorio_nao_encontradas_excel_lista_vazia(tmp_path):
     ]
 
 
-def _nota(numero_nf, codigo_receita, referencia, valor_principal, especificacao="ICMS ANTECIPAÇÃO TRIBUTÁRIA"):
+def _nota(
+    numero_nf,
+    codigo_receita,
+    referencia,
+    valor_principal,
+    especificacao="ICMS ANTECIPAÇÃO TRIBUTÁRIA",
+    arquivo="DAE 01.pdf",
+):
     return NotaConciliada(
         numero_nf=numero_nf,
         codigo_receita=codigo_receita,
         referencia=referencia,
         valor_principal=valor_principal,
         especificacao_receita=especificacao,
+        dae_arquivo_origem=arquivo,
     )
 
 
@@ -281,25 +290,25 @@ def test_gerar_relatorio_conciliadas_excel_mescla_nfs_do_mesmo_dae(tmp_path):
     planilha = workbook.active
     valores = [[c.value for c in linha] for linha in planilha.iter_rows()]
 
-    # Linha 0: "Mês 12" (sem ano identificável, referência não é reconhecida por
+    # Linha 0: "Dezembro" (sem ano identificável, referência não é reconhecida por
     # _ano_mes_da_referencia pois falta o padrão completo -- aqui usamos uma
-    # referência válida "12/2025" que cai em Ano 2025 / Mês 12.
+    # referência válida "12/2025" que cai em Ano 2025 / Dezembro.
     assert valores[0][0] == "Ano 2025"
-    assert valores[1][0] == "Mês 12"
+    assert valores[1][0] == "Dezembro"
     assert valores[2][0] == "Número da NF"
 
     # Bloco do maior valor (6405.82, NFs 2/3/4) vem primeiro.
-    assert valores[3] == ["2", "1145", "12/2025", 6405.82, "ICMS ANTECIPAÇÃO TRIBUTÁRIA", "🟢 Conciliado"]
+    assert valores[3] == ["2", "1145", "12/2025", 6405.82, "ICMS ANTECIPAÇÃO TRIBUTÁRIA", "DAE 01.pdf", "🟢 Conciliado"]
     assert valores[4][0] == "3"
     assert valores[4][1] is None
     assert valores[5][0] == "4"
     assert valores[5][1] is None
 
     # Bloco seguinte (5703.74, NF 1) -- bloco de uma linha só, sem mesclagem.
-    assert valores[6] == ["1", "1145", "12/2025", 5703.74, "ICMS ANTECIPAÇÃO TRIBUTÁRIA", "🟢 Conciliado"]
+    assert valores[6] == ["1", "1145", "12/2025", 5703.74, "ICMS ANTECIPAÇÃO TRIBUTÁRIA", "DAE 01.pdf", "🟢 Conciliado"]
 
     # Bloco do código 2175 (184.48, NF 5) por último.
-    assert valores[7] == ["5", "2175", "12/2025", 184.48, "ICMS - ANTECIPACAO PARCIAL", "🟢 Conciliado"]
+    assert valores[7] == ["5", "2175", "12/2025", 184.48, "ICMS - ANTECIPACAO PARCIAL", "DAE 01.pdf", "🟢 Conciliado"]
 
     faixas_mescladas = {str(faixa) for faixa in planilha.merged_cells.ranges}
     assert "B4:B6" in faixas_mescladas
@@ -307,6 +316,7 @@ def test_gerar_relatorio_conciliadas_excel_mescla_nfs_do_mesmo_dae(tmp_path):
     assert "D4:D6" in faixas_mescladas
     assert "E4:E6" in faixas_mescladas
     assert "F4:F6" in faixas_mescladas
+    assert "G4:G6" in faixas_mescladas
     # bloco de uma linha só (5703.74) e o de 184.48 não geram merge nenhum
     assert not any(faixa.startswith("B7") or faixa.startswith("B8") for faixa in faixas_mescladas)
 
@@ -344,3 +354,38 @@ def test_elementos_conciliadas_agrupadas_gera_span_para_bloco_com_mais_de_uma_nf
         assert ((coluna, 1), (coluna, 2)) in spans
     # bloco de uma linha só (NF 3, 184.48) não deve gerar nenhum span
     assert not any(inicio[1] == 3 for inicio, _fim in spans)
+
+
+def test_titulo_mes_usa_nome_por_extenso():
+    from src.reports.report_generator import _titulo_mes
+
+    assert _titulo_mes(1) == "Janeiro"
+    assert _titulo_mes(3) == "Março"
+    assert _titulo_mes(12) == "Dezembro"
+    assert _titulo_mes(None) == "Sem Mês Identificado"
+    assert _titulo_mes(13) == "Sem Mês Identificado"
+
+
+def test_conciliadas_do_mesmo_valor_em_arquivos_de_dae_diferentes_nao_sao_mescladas():
+    notas = [
+        _nota("1", "1145", "12/2025", 100.0, arquivo="DAE 01.pdf"),
+        _nota("2", "1145", "12/2025", 100.0, arquivo="DAE 02.pdf"),
+    ]
+
+    assert len(_agrupar_conciliadas_por_dae(notas)) == 2
+
+
+def test_nao_encontradas_excel_agrupa_por_ano_e_mes_do_relatorio(tmp_path):
+    nao_encontradas = [
+        NotaNaoEncontrada(numero_nf="376", ano=2021, mes=10),
+        NotaNaoEncontrada(numero_nf="1575751", ano=2021, mes=11),
+    ]
+    caminho = tmp_path / "nao_encontradas_periodo.xlsx"
+
+    gerar_relatorio_nao_encontradas(nao_encontradas, caminho)
+
+    planilha = openpyxl.load_workbook(caminho).active
+    primeiras_colunas = [linha[0].value for linha in planilha.iter_rows()]
+    assert primeiras_colunas[:3] == ["Ano 2021", "Outubro", "Número da NF"]
+    assert "Novembro" in primeiras_colunas
+    assert "Sem Ano Identificado" not in primeiras_colunas

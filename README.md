@@ -8,6 +8,9 @@ Conciliação automática entre o mapa de notas fiscais sujeitas a ICMS Antecipa
 - Leitura do mapa de notas (planilha com aba `NF_Aquisicao`, detectada automaticamente) ou de um relatório simples `.xlsx`/`.xls`/`.csv`/`.pdf` com detecção automática da coluna de número da nota.
 - Conciliação: parte de cada nota do mapa e verifica se ela é citada em algum DAE do lote processado (normalizando pontuação e zeros à esquerda). Nota no mapa E em algum DAE → conciliada. Nota no mapa e ausente de todos os DAEs → não encontrada (possível ICMS antecipação não recolhido).
 - Geração de dois relatórios `.xlsx`: notas conciliadas e notas não encontradas.
+- Aba **Pagamentos Notas**: compara o relatório de Entradas (PDF SEFAZ-BA, linhas ICMS ou ST/AT) com a lista de notas fiscais/itens (PDF). Soma os itens de cada nota e cruza por mês de **lançamento** + número da nota, sem tolerância (exato ao centavo). Gera Excel e PDF com três grupos: Valores Iguais, Valores Diferentes (com coluna Diferença) e Notas Não Encontradas nas Entradas.
+- Aba **Conciliação vs DAE**: recebe um ou mais DAE (PDF) e o relatório já conciliado de Pagamentos Notas (`.xlsx`, todas as abas). Para cada nota localiza o número nos DAE e devolve código da receita, referência, valor, especificação e o **arquivo do DAE**; notas ausentes de todos os DAE vão para um relatório de não encontradas, agrupado por ano e mês. Gera Excel e PDF das encontradas e das não encontradas.
+- Todos os relatórios agrupam por Ano → Mês, com o nome do mês por extenso (Janeiro, Fevereiro…). Os relatórios de notas conciliadas incluem a coluna "Arquivo do DAE".
 - Histórico de conciliações salvo em `%LOCALAPPDATA%\AuditaDAE\auditadae.db`, mantido entre execuções.
 
 ## Instalação (desenvolvimento)
@@ -66,7 +69,7 @@ Checklist para publicar uma nova versão:
 
 ```
 src/
-├── extractors/   # extração de PDF (DAE) e de relatório (xlsx/xls/csv/pdf)
+├── extractors/   # extração de PDF (DAE, Entradas, lista de notas) e de relatório (xlsx/xls/csv/pdf)
 ├── models/       # modelos pydantic
 ├── db/           # SQLite (schema + repositório)
 ├── engine/       # motor de conciliação
@@ -75,3 +78,5 @@ src/
 └── main.py       # orquestração ponta a ponta
 tests/            # testes unitários (pytest)
 ```
+
+*Documentação atualizada em 13/10/2026 — abas Pagamentos Notas e Conciliação vs DAE, meses por extenso e coluna "Arquivo do DAE" nos relatórios.*

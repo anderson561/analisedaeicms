@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from src.models.dae_models import DaeDocumento, LinhaRelatorio, NotaConciliada, NotaNaoEncontrada
 
@@ -7,6 +8,11 @@ def sanitize_nf_numero(nf: str) -> str:
     apenas_digitos = re.sub(r"\D", "", nf or "")
     sem_zeros_esquerda = apenas_digitos.lstrip("0")
     return sem_zeros_esquerda or "0"
+
+
+def _inteiro_ou_none(valor: str | None) -> int | None:
+    texto = (valor or "").strip()
+    return int(texto) if texto.isdigit() else None
 
 
 def conciliar(
@@ -38,6 +44,7 @@ def conciliar(
                     referencia=dae_correspondente.referencia,
                     valor_principal=dae_correspondente.valor_principal,
                     especificacao_receita=dae_correspondente.especificacao_receita,
+                    dae_arquivo_origem=Path(dae_correspondente.arquivo_origem).name,
                 )
             )
         else:
@@ -46,6 +53,8 @@ def conciliar(
                     numero_nf=linha.numero_nf,
                     data_emissao=linha.dados_originais.get("Data Emissão"),
                     cnpj_emitente=linha.dados_originais.get("CNPJ Emitente"),
+                    ano=_inteiro_ou_none(linha.dados_originais.get("Ano")),
+                    mes=_inteiro_ou_none(linha.dados_originais.get("Mês")),
                 )
             )
 

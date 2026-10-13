@@ -26,16 +26,16 @@ def test_gerar_relatorio_icms_at_excel_agrupado_por_ano_e_mes(tmp_path):
     valores = [[c.value for c in linha] for linha in planilha.iter_rows()]
 
     assert valores[0][0] == "Ano 2021"
-    assert valores[1][0] == "Mês 06"
+    assert valores[1][0] == "Junho"
     assert valores[2][0] == "Valor Apurado (R$)"
     assert valores[3][0] == 3017.16
     assert valores[3][1] == 1187.99
     assert valores[3][2] == 1829.17
 
-    assert valores[5][0] == "Mês 07"
+    assert valores[5][0] == "Julho"
 
     indice_ano_2022 = next(i for i, linha in enumerate(valores) if linha[0] == "Ano 2022")
-    assert valores[indice_ano_2022 + 1][0] == "Mês 01"
+    assert valores[indice_ano_2022 + 1][0] == "Janeiro"
 
 
 def test_gerar_relatorio_icms_at_excel_lista_vazia(tmp_path):
@@ -59,7 +59,7 @@ def test_gerar_relatorio_icms_at_pdf_contem_titulo_e_valores(tmp_path):
 
     assert "Buscas ICMS Antecipação Tributária" in texto
     assert "Ano 2021" in texto
-    assert "Mês 06" in texto
+    assert "Junho" in texto
     assert "3017.16" in texto
     assert "1829.17" in texto
     assert "Ano 2022" in texto

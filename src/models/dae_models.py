@@ -23,6 +23,7 @@ class NotaConciliada(BaseModel):
     referencia: str | None = None
     valor_principal: float | None = None
     especificacao_receita: str | None = None
+    dae_arquivo_origem: str | None = None
     status: str = "Conciliado"
 
 
@@ -30,6 +31,8 @@ class NotaNaoEncontrada(BaseModel):
     numero_nf: str
     data_emissao: str | None = None
     cnpj_emitente: str | None = None
+    ano: int | None = None
+    mes: int | None = None
     status: str = "Não Encontrada em Nenhum DAE Processado"
 
 
@@ -91,6 +94,37 @@ class LinhaIcmsAt(BaseModel):
     valor_apurado: float | None = None
     valor_pago: float | None = None
     valor_a_recolher: float | None = None
+
+
+class LinhaEntradaIcms(BaseModel):
+    ano: int
+    mes: int
+    nota: str
+    fornecedor: str | None = None
+    valor_contabil: float
+    tipo: str
+
+
+class LinhaNotaItem(BaseModel):
+    ano: int
+    mes: int
+    nota: str
+    descricao: str
+    valor: float
+    ano_lancamento: int | None = None
+    mes_lancamento: int | None = None
+
+
+class NotaFiscalComparada(BaseModel):
+    ano: int
+    mes: int
+    nota: str
+    descricao: str
+    fornecedor: str | None = None
+    valor_notas: float
+    valor_entrada: float | None = None
+    diferenca: float | None = None
+    status: str
 
 
 class ResultadoProcessamento(BaseModel):
