@@ -2,26 +2,31 @@ from pathlib import Path
 
 from src.db.database import obter_conexao
 from src.db.repository import salvar_conciliacao, salvar_dae
+from src.engine.analisador_apuracao import analisar_apuracao
 from src.engine.comparador_pagamentos_notas import agrupar_notas_por_documento, comparar_com_entradas
 from src.engine.conciliador import conciliar, filtrar_conciliadas_com_dados
+from src.engine.verificador_creditos import verificar_creditos
 from src.engine.verificador_pagamento import verificar_pagamentos
 from src.engine.verificador_parcelamento import verificar_parcelamento, verificar_parcelamento_por_valor
+from src.extractors.apuracao_extractors import extrair_informacoes_dae, extrair_notas_relatorio_creditos
 from src.extractors.classificador_planilha import classificar_abas
 from src.extractors.dae_extractor import extrair_dae
 from src.extractors.entradas_icms_extractor import extrair_entradas_icms
 from src.extractors.icms_at_extractor import extrair_icms_at
-from src.extractors.lista_notas_extractor import extrair_itens_notas
+from src.extractors.lista_notas_extractor import extrair_itens_lista_completos, extrair_itens_notas
 from src.extractors.pagamento_extractor import extrair_pagamentos
 from src.extractors.pagamento_planilha_extractor import extrair_pagamentos_e_parcelamento_de_planilha
 from src.extractors.parcelamento_extractor import extrair_parcelamento
 from src.extractors.relatorio_conciliado_extractor import extrair_notas_relatorio_conciliado
 from src.extractors.relatorio_extractor import ler_relatorio
 from src.models.dae_models import (
+    AnaliseApuracao,
     DaeDocumento,
     DaeParceladoEncontrado,
     DaeParceladoNaoEncontrado,
     DaePagamentoNaoLocalizado,
     NotaConciliada,
+    NotaCredito,
     NotaFiscalComparada,
     NotaNaoEncontrada,
     PagamentoConfirmado,
@@ -137,3 +142,19 @@ def conciliar_relatorio_com_daes_lote(
     notas = extrair_notas_relatorio_conciliado(caminho_relatorio)
     conciliadas, nao_encontradas = conciliar(daes, notas)
     return conciliadas, nao_encontradas
+
+
+def verificar_creditos_lote(caminhos_lista: list[str]) -> tuple[list[NotaCredito], int, int]:
+    """Devolve (notas com créditos somados, itens lidos, itens excluídos)."""
+    itens = [item for caminho in caminhos_lista for item in extrair_itens_lista_completos(caminho)]
+    notas, excluidos = verificar_creditos(itens)
+    return notas, len(itens), excluidos
+
+
+def analisar_apuracao_lote(
+    caminho_relatorio_creditos: str, caminhos_antecipacao: list[str], caminho_planilha_daes: str
+) -> list[AnaliseApuracao]:
+    notas = extrair_notas_relatorio_creditos(caminho_relatorio_creditos)
+    itens = [item for caminho in caminhos_antecipacao for item in extrair_itens_lista_completos(caminho)]
+    informacoes = extrair_informacoes_dae(caminho_planilha_daes)
+    return analisar_apuracao(notas, itens, informacoes)

@@ -10,6 +10,8 @@ Conciliação automática entre o mapa de notas fiscais sujeitas a ICMS Antecipa
 - Geração de dois relatórios `.xlsx`: notas conciliadas e notas não encontradas.
 - Aba **Pagamentos Notas**: compara o relatório de Entradas (PDF SEFAZ-BA, linhas ICMS ou ST/AT) com a lista de notas fiscais/itens (PDF). Soma os itens de cada nota e cruza por mês de **lançamento** + número da nota, sem tolerância (exato ao centavo). Gera Excel e PDF com três grupos: Valores Iguais, Valores Diferentes (com coluna Diferença) e Notas Não Encontradas nas Entradas.
 - Aba **Conciliação vs DAE**: recebe um ou mais DAE (PDF) e o relatório já conciliado de Pagamentos Notas (`.xlsx`, todas as abas). Para cada nota localiza o número nos DAE e devolve código da receita, referência, valor, especificação e o **arquivo do DAE**; notas ausentes de todos os DAE vão para um relatório de não encontradas, agrupado por ano e mês. Gera Excel e PDF das encontradas e das não encontradas.
+- Aba **Verificar Créditos**: lê uma ou mais listas "Antecipação parcial… Lista de notas fiscais/itens" (PDF), descarta calçados (NCM 64) e bolsas, mochilas e carteiras (NCM 4202) e, por nota (número + data de emissão + UF), soma VlLiqItem, VlCredEmpr, VlBcAntParc e VlCredAud. Relatório Excel e PDF com datas de emissão e lançamento, UF, descrição/CodItem/NCM do 1º item, totais por mês e total geral.
+- Aba **Analisar Apuração**: recebe o relatório de créditos (Excel ou PDF gerado na aba Verificar Créditos), a lista de notas fiscais/itens da antecipação (PDF) e a planilha de DAEs (`.xlsx`, coluna "Informações de Pagamento (DAE)"). Gera as tabelas de notas por Ano → Mês (Data Emissão, Nº Nota, Descrição/CodItem/NCM, VlLiqItem, VlCredEmpr, VlBcAntParc, VlCredAud) acrescidas de Valor Pago = Σ(VlTotItem × AliqInt) − VlCredEmpr e Informação Norte (texto do DAE; células mescladas valem para todas as notas do bloco), com totais por mês e geral. Notas fora da planilha de DAEs ou da antecipação são sinalizadas.
 - Todos os relatórios agrupam por Ano → Mês, com o nome do mês por extenso (Janeiro, Fevereiro…). Os relatórios de notas conciliadas incluem a coluna "Arquivo do DAE".
 - Histórico de conciliações salvo em `%LOCALAPPDATA%\AuditaDAE\auditadae.db`, mantido entre execuções.
 
@@ -80,3 +82,7 @@ tests/            # testes unitários (pytest)
 ```
 
 *Documentação atualizada em 13/10/2026 — abas Pagamentos Notas e Conciliação vs DAE, meses por extenso e coluna "Arquivo do DAE" nos relatórios.*
+
+*Documentação atualizada em 26/10/2026 — aba Verificar Créditos e correção da leitura da lista de notas (itens com número de 3 dígitos na descrição).*
+
+*Documentação atualizada em 26/10/2026 — aba Analisar Apuração.*

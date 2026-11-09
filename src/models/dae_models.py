@@ -115,6 +115,45 @@ class LinhaNotaItem(BaseModel):
     mes_lancamento: int | None = None
 
 
+class ItemListaNotas(BaseModel):
+    data_emissao: str
+    data_lancamento: str | None = None
+    ano: int
+    mes: int
+    uf: str
+    nota: str
+    descricao: str
+    cod_item: str | None = None
+    ncm: str | None = None
+    vl_liq_item: float
+    vl_tot_item: float
+    aliq_int: float
+    vl_cred_empr: float
+    vl_bc_ant_parc: float
+    vl_cred_aud: float
+
+
+class NotaCredito(BaseModel):
+    ano: int
+    mes: int
+    data_emissao: str
+    data_lancamento: str | None = None
+    uf: str
+    nota: str
+    descricao: str
+    quantidade_itens: int
+    vl_liq_item: float
+    vl_cred_empr: float
+    vl_bc_ant_parc: float
+    vl_cred_aud: float
+
+
+class AnaliseApuracao(BaseModel):
+    nota: NotaCredito
+    valor_pago: float | None = None
+    informacao_norte: str
+
+
 class NotaFiscalComparada(BaseModel):
     ano: int
     mes: int
