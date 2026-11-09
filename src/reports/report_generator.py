@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable, TypeVar
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import getSampleStyleSheet
@@ -15,7 +15,9 @@ from src.models.dae_models import (
     DaeParceladoNaoEncontrado,
     DaePagamentoNaoLocalizado,
     LinhaIcmsAt,
+    AnaliseApuracao,
     NotaConciliada,
+    NotaCredito,
     NotaFiscalComparada,
     NotaNaoEncontrada,
     PagamentoConfirmado,
@@ -87,6 +89,30 @@ COLUNAS_PAGAMENTOS_NOTAS = [
     "Valor Entrada (R$)",
     "Diferença (R$)",
     "Fornecedor",
+]
+
+COLUNAS_CREDITOS = [
+    "Data Emissão",
+    "Data Lançamento",
+    "UF",
+    "Nº Nota",
+    "Descrição / CodItem / NCM",
+    "VlLiqItem (R$)",
+    "VlCredEmpr (R$)",
+    "VlBcAntParc (R$)",
+    "VlCredAud (R$)",
+]
+
+COLUNAS_APURACAO = [
+    "Data Emissão",
+    "Nº Nota",
+    "Descrição / CodItem / NCM",
+    "VlLiqItem (R$)",
+    "VlCredEmpr (R$)",
+    "VlBcAntParc (R$)",
+    "VlCredAud (R$)",
+    "Valor Pago (R$)",
+    "Informação Norte",
 ]
 
 COLUNAS_NOTAS_NAO_ENCONTRADAS = [
@@ -818,6 +844,271 @@ def gerar_relatorio_pagamentos_notas_pdf(
         grupos = _agrupar_por_ano_mes(itens, lambda n: (n.ano, n.mes))
         elementos.extend(_elementos_por_ano_mes(estilos, colunas, grupos, linha_de, cor, "Heading3", "Heading4"))
         elementos.append(Spacer(1, 12))
+
+    documento.build(elementos)
+    return caminho
+
+
+FORMATO_MOEDA_EXCEL = "#,##0.00"
+COR_CABECALHO_CREDITOS = "#1f4e79"
+
+
+def _totais_creditos(notas: list[NotaCredito]) -> tuple[float, float, float, float]:
+    return (
+        round(sum(n.vl_liq_item for n in notas), 2),
+        round(sum(n.vl_cred_empr for n in notas), 2),
+        round(sum(n.vl_bc_ant_parc for n in notas), 2),
+        round(sum(n.vl_cred_aud for n in notas), 2),
+    )
+
+
+def _linha_credito(nota: NotaCredito) -> list:
+    return [
+        nota.data_emissao,
+        nota.data_lancamento or "",
+        nota.uf,
+        nota.nota,
+        nota.descricao,
+        nota.vl_liq_item,
+        nota.vl_cred_empr,
+        nota.vl_bc_ant_parc,
+        nota.vl_cred_aud,
+    ]
+
+
+def _linha_total_creditos(rotulo: str, notas: list[NotaCredito]) -> list:
+    return ["", "", "", "", rotulo, *_totais_creditos(notas)]
+
+
+def _formatar_ultima_linha_creditos(planilha, negrito: bool = False) -> None:
+    linha = planilha.max_row
+    for coluna in range(6, 10):
+        celula = planilha.cell(row=linha, column=coluna)
+        celula.number_format = FORMATO_MOEDA_EXCEL
+        if negrito:
+            celula.font = Font(bold=True)
+    if negrito:
+        planilha.cell(row=linha, column=5).font = Font(bold=True)
+
+
+def _escrever_creditos_excel(planilha, notas: list[NotaCredito]) -> None:
+    grupos_ano = _agrupar_por_ano_mes(notas, lambda n: (n.ano, n.mes))
+    if not grupos_ano:
+        planilha.append(COLUNAS_CREDITOS)
+    for indice_ano, (ano, grupos_mes) in enumerate(grupos_ano):
+        if indice_ano:
+            planilha.append([])
+        planilha.append([_titulo_ano(ano)])
+        for indice_mes, (mes, itens) in enumerate(grupos_mes):
+            if indice_mes:
+                planilha.append([])
+            planilha.append([_titulo_mes(mes)])
+            planilha.append(COLUNAS_CREDITOS)
+            for nota in itens:
+                planilha.append(_linha_credito(nota))
+                _formatar_ultima_linha_creditos(planilha)
+            planilha.append(_linha_total_creditos(f"Total de {_titulo_mes(mes)}", itens))
+            _formatar_ultima_linha_creditos(planilha, negrito=True)
+    if notas:
+        planilha.append([])
+        planilha.append(_linha_total_creditos("Total Geral", notas))
+        _formatar_ultima_linha_creditos(planilha, negrito=True)
+    for coluna, largura in zip("ABCDEFGHI", (13, 15, 5, 14, 70, 15, 15, 16, 15)):
+        planilha.column_dimensions[coluna].width = largura
+
+
+def gerar_relatorio_creditos_excel(notas: list[NotaCredito], caminho: Path) -> Path:
+    workbook = Workbook()
+    planilha = workbook.active
+    planilha.title = "Créditos"
+    _escrever_creditos_excel(planilha, notas)
+    workbook.save(str(caminho))
+    return caminho
+
+
+def _moeda_pdf(valor: float) -> str:
+    return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _cabecalho_pdf_creditos(estilos, titulo: str) -> list:
+    return [
+        Paragraph(titulo, estilos["Title"]),
+        Paragraph(
+            "Exceto calçados (NCM 64) e bolsas, mochilas e carteiras (NCM 4202). "
+            f"Gerado em {datetime.now():%d/%m/%Y %H:%M}",
+            estilos["Normal"],
+        ),
+        Spacer(1, 12),
+    ]
+
+
+def _elementos_creditos_pdf(estilos, notas: list[NotaCredito]) -> list:
+    estilo_descricao = estilos["BodyText"].clone("descricao_credito", fontSize=7, leading=8)
+    elementos = []
+    larguras = [56, 74, 22, 46, 212, 70, 74, 76, 70]
+    alinhar_valores = [("ALIGN", (5, 0), (-1, -1), "RIGHT")]
+
+    def _linha_pdf(nota: NotaCredito) -> list:
+        linha = _linha_credito(nota)
+        return linha[:4] + [Paragraph(nota.descricao, estilo_descricao)] + [_moeda_pdf(v) for v in linha[5:]]
+
+    def _total_pdf(rotulo: str, itens: list[NotaCredito]) -> list:
+        return ["", "", "", "", rotulo, *(_moeda_pdf(v) for v in _totais_creditos(itens))]
+
+    def _tabela(dados: list[list], comandos_extra: list) -> Table:
+        tabela = _tabela_relatorio(dados, COR_CABECALHO_CREDITOS, alinhar_valores + comandos_extra)
+        tabela._argW = larguras
+        return tabela
+
+    grupos_ano = _agrupar_por_ano_mes(notas, lambda n: (n.ano, n.mes))
+    if not grupos_ano:
+        elementos.append(_tabela_relatorio([COLUNAS_CREDITOS], COR_CABECALHO_CREDITOS))
+    for ano, grupos_mes in grupos_ano:
+        elementos.append(Paragraph(_titulo_ano(ano), estilos["Heading2"]))
+        for mes, itens in grupos_mes:
+            elementos.append(Paragraph(_titulo_mes(mes), estilos["Heading3"]))
+            dados = [COLUNAS_CREDITOS] + [_linha_pdf(n) for n in itens]
+            dados.append(_total_pdf(f"Total de {_titulo_mes(mes)}", itens))
+            elementos.append(_tabela(dados, [("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")]))
+            elementos.append(Spacer(1, 8))
+    if notas:
+        elementos.append(_tabela([_total_pdf("Total Geral", notas)], []))
+    return elementos
+
+
+def gerar_relatorio_creditos_pdf(notas: list[NotaCredito], caminho: Path) -> Path:
+    documento = SimpleDocTemplate(
+        str(caminho),
+        pagesize=landscape(A4),
+        title="AuditaDAE - Verificacao de Creditos",
+    )
+    estilos = getSampleStyleSheet()
+    elementos = _cabecalho_pdf_creditos(estilos, "AuditaDAE — Verificação de Créditos")
+    elementos.extend(_elementos_creditos_pdf(estilos, notas))
+    documento.build(elementos)
+    return caminho
+
+
+# Relatório da aba "Analisar Apuração": as notas do relatório de créditos
+# (sem Data Lançamento e UF) acrescidas de Valor Pago e Informação Norte.
+INDICE_PRIMEIRO_VALOR_APURACAO = 3
+QUANTIDADE_VALORES_APURACAO = 5
+
+
+def _linha_apuracao(analise: AnaliseApuracao) -> list:
+    nota = analise.nota
+    return [
+        nota.data_emissao,
+        nota.nota,
+        nota.descricao,
+        nota.vl_liq_item,
+        nota.vl_cred_empr,
+        nota.vl_bc_ant_parc,
+        nota.vl_cred_aud,
+        analise.valor_pago,
+        analise.informacao_norte,
+    ]
+
+
+def _totais_apuracao(analises: list[AnaliseApuracao]) -> list[float]:
+    return [*_totais_creditos([a.nota for a in analises]), round(sum(a.valor_pago or 0.0 for a in analises), 2)]
+
+
+def _linha_total_apuracao(rotulo: str, analises: list[AnaliseApuracao]) -> list:
+    return ["", "", rotulo, *_totais_apuracao(analises), ""]
+
+
+def _grupos_apuracao(analises: list[AnaliseApuracao]):
+    return _agrupar_por_ano_mes(analises, lambda a: (a.nota.ano, a.nota.mes))
+
+
+def gerar_relatorio_apuracao_excel(analises: list[AnaliseApuracao], caminho: Path) -> Path:
+    workbook = Workbook()
+    planilha = workbook.active
+    planilha.title = "Apuração"
+
+    def _anexar(linha: list, negrito: bool = False) -> None:
+        planilha.append(linha)
+        numero = planilha.max_row
+        inicio = INDICE_PRIMEIRO_VALOR_APURACAO + 1
+        for coluna in range(inicio, inicio + QUANTIDADE_VALORES_APURACAO):
+            planilha.cell(row=numero, column=coluna).number_format = FORMATO_MOEDA_EXCEL
+            if negrito:
+                planilha.cell(row=numero, column=coluna).font = Font(bold=True)
+        planilha.cell(row=numero, column=9).alignment = Alignment(wrap_text=True, vertical="top")
+        if negrito:
+            planilha.cell(row=numero, column=3).font = Font(bold=True)
+
+    grupos_ano = _grupos_apuracao(analises)
+    if not grupos_ano:
+        planilha.append(COLUNAS_APURACAO)
+    for indice_ano, (ano, grupos_mes) in enumerate(grupos_ano):
+        if indice_ano:
+            planilha.append([])
+        planilha.append([_titulo_ano(ano)])
+        for indice_mes, (mes, itens) in enumerate(grupos_mes):
+            if indice_mes:
+                planilha.append([])
+            planilha.append([_titulo_mes(mes)])
+            planilha.append(COLUNAS_APURACAO)
+            for analise in itens:
+                _anexar(_linha_apuracao(analise))
+            _anexar(_linha_total_apuracao(f"Total de {_titulo_mes(mes)}", itens), negrito=True)
+    if analises:
+        planilha.append([])
+        _anexar(_linha_total_apuracao("Total Geral", analises), negrito=True)
+    for coluna, largura in zip("ABCDEFGHI", (13, 11, 60, 15, 15, 16, 15, 15, 60)):
+        planilha.column_dimensions[coluna].width = largura
+    workbook.save(str(caminho))
+    return caminho
+
+
+def gerar_relatorio_apuracao_pdf(analises: list[AnaliseApuracao], caminho: Path) -> Path:
+    documento = SimpleDocTemplate(
+        str(caminho),
+        pagesize=landscape(A4),
+        title="AuditaDAE - Analise da Apuracao",
+    )
+    estilos = getSampleStyleSheet()
+    estilo_texto = estilos["BodyText"].clone("texto_apuracao", fontSize=7, leading=8)
+    elementos = _cabecalho_pdf_creditos(estilos, "AuditaDAE — Análise da Apuração")
+    larguras = [48, 42, 160, 58, 58, 62, 56, 56, 158]
+    comandos_base = [("ALIGN", (3, 0), (7, -1), "RIGHT")]
+
+    def _moeda(valor: float | None) -> str:
+        return _moeda_pdf(valor) if valor is not None else ""
+
+    def _linha_pdf(analise: AnaliseApuracao) -> list:
+        linha = _linha_apuracao(analise)
+        return [
+            *linha[:2],
+            Paragraph(analise.nota.descricao, estilo_texto),
+            *(_moeda(v) for v in linha[3:8]),
+            Paragraph(analise.informacao_norte, estilo_texto),
+        ]
+
+    def _total_pdf(rotulo: str, itens: list[AnaliseApuracao]) -> list:
+        return ["", "", rotulo, *(_moeda(v) for v in _totais_apuracao(itens)), ""]
+
+    def _tabela(dados: list[list], comandos_extra: list) -> Table:
+        tabela = _tabela_relatorio(dados, COR_CABECALHO_CREDITOS, comandos_base + comandos_extra)
+        tabela._argW = larguras
+        return tabela
+
+    cabecalho = [Paragraph(f"<b>{c}</b>", estilo_texto.clone("cab", textColor=colors.white)) for c in COLUNAS_APURACAO]
+    grupos_ano = _grupos_apuracao(analises)
+    if not grupos_ano:
+        elementos.append(_tabela([cabecalho], []))
+    for ano, grupos_mes in grupos_ano:
+        elementos.append(Paragraph(_titulo_ano(ano), estilos["Heading2"]))
+        for mes, itens in grupos_mes:
+            elementos.append(Paragraph(_titulo_mes(mes), estilos["Heading3"]))
+            dados = [cabecalho] + [_linha_pdf(a) for a in itens]
+            dados.append(_total_pdf(f"Total de {_titulo_mes(mes)}", itens))
+            elementos.append(_tabela(dados, [("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold")]))
+            elementos.append(Spacer(1, 8))
+    if analises:
+        elementos.append(_tabela([_total_pdf("Total Geral", analises)], []))
 
     documento.build(elementos)
     return caminho

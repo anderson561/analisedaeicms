@@ -7,28 +7,37 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from src.db.database import obter_conexao
 from src.db.repository import listar_historico
+from src.engine.analisador_apuracao import INFORMACAO_SEM_DAE
 from src.main import (
+    analisar_apuracao_lote,
     conciliar_relatorio_com_daes_lote,
     detectar_fontes_relatorio,
     processar_lote,
+    verificar_creditos_lote,
     verificar_pagamentos_lote,
     verificar_pagamentos_notas_lote,
     verificar_parcelamento_lote,
 )
 from src.models.dae_models import (
+    AnaliseApuracao,
     DaeParceladoEncontrado,
     DaeParceladoNaoEncontrado,
     DaePagamentoNaoLocalizado,
     LinhaIcmsAt,
     NotaConciliada,
+    NotaCredito,
     NotaFiscalComparada,
     NotaNaoEncontrada,
     PagamentoConfirmado,
     ResultadoProcessamento,
 )
 from src.reports.report_generator import (
+    gerar_relatorio_apuracao_excel,
+    gerar_relatorio_apuracao_pdf,
     gerar_relatorio_conciliadas,
     gerar_relatorio_conciliadas_pdf,
+    gerar_relatorio_creditos_excel,
+    gerar_relatorio_creditos_pdf,
     gerar_relatorio_icms_at_excel,
     gerar_relatorio_icms_at_pdf,
     gerar_relatorio_nao_encontradas,
@@ -84,6 +93,12 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.caminho_relatorio_conc_dae: str | None = None
         self.ultimas_conciliadas_conc_dae: list[NotaConciliada] = []
         self.ultimas_nao_encontradas_conc_dae: list[NotaNaoEncontrada] = []
+        self.caminhos_lista_creditos: list[str] = []
+        self.ultimas_notas_creditos: list[NotaCredito] = []
+        self.caminho_creditos_apuracao: str | None = None
+        self.caminhos_antecipacao_apuracao: list[str] = []
+        self.caminho_daes_apuracao: str | None = None
+        self.ultimas_analises_apuracao: list[AnaliseApuracao] = []
 
         self._montar_layout()
         self._atualizar_historico()
@@ -101,12 +116,16 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         aba_parcelamento = self.tabview.add("Parcelamento")
         aba_pagamentos_notas = self.tabview.add("Pagamentos Notas")
         aba_conciliacao_dae = self.tabview.add("Conciliação vs DAE")
+        aba_creditos = self.tabview.add("Verificar Créditos")
+        aba_apuracao = self.tabview.add("Analisar Apuração")
 
         self._montar_aba_notas(aba_notas)
         self._montar_aba_pagamentos(aba_pagamentos)
         self._montar_aba_parcelamento(aba_parcelamento)
         self._montar_aba_pagamentos_notas(aba_pagamentos_notas)
         self._montar_aba_conciliacao_dae(aba_conciliacao_dae)
+        self._montar_aba_creditos(aba_creditos)
+        self._montar_aba_apuracao(aba_apuracao)
 
         self.barra_progresso = ctk.CTkProgressBar(self, mode="indeterminate")
         self.barra_progresso.pack(fill="x", padx=16, pady=8)
@@ -458,6 +477,99 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         )
         self.botao_pdf_nao_encontradas_conc_dae = ctk.CTkButton(
             frame_relatorios, text="PDF Não Encontradas", command=self._gerar_pdf_nao_encontradas_conc_dae
+        )
+
+    def _montar_aba_creditos(self, aba) -> None:
+        frame_lista = ctk.CTkFrame(aba)
+        frame_lista.pack(fill="x", padx=8, pady=(8, 8))
+        ctk.CTkLabel(
+            frame_lista,
+            text="Lista de notas fiscais/itens (PDF) — solte 1 ou mais arquivos aqui ou selecione",
+        ).pack(anchor="w", padx=8, pady=(8, 0))
+        self.lista_pdfs_creditos = ctk.CTkTextbox(frame_lista, height=90)
+        self.lista_pdfs_creditos.pack(fill="x", padx=8, pady=8)
+        self.lista_pdfs_creditos.drop_target_register(DND_FILES)
+        self.lista_pdfs_creditos.dnd_bind("<<Drop>>", self._on_drop_pdfs_creditos)
+        ctk.CTkButton(
+            frame_lista,
+            text="Selecionar Lista(s) de Notas",
+            command=self._selecionar_pdfs_creditos,
+        ).pack(padx=8, pady=(0, 8), anchor="w")
+        ctk.CTkLabel(
+            aba,
+            text="Calçados (NCM 64) e bolsas, mochilas e carteiras (NCM 4202) não entram na verificação.",
+        ).pack(anchor="w", padx=16)
+
+        frame_acoes = ctk.CTkFrame(aba, fg_color="transparent")
+        frame_acoes.pack(fill="x", padx=8, pady=8)
+
+        self.botao_verificar_creditos = ctk.CTkButton(
+            frame_acoes,
+            text="Verificar Créditos",
+            command=self._verificar_creditos,
+            state="disabled",
+        )
+        self.botao_verificar_creditos.pack(side="left")
+
+        # Só aparecem (pack) depois de "Verificar Créditos" concluir com sucesso.
+        self.botao_gerar_excel_creditos = ctk.CTkButton(
+            frame_acoes, text="Gerar Relatório Excel", command=self._gerar_excel_creditos
+        )
+        self.botao_gerar_pdf_creditos = ctk.CTkButton(
+            frame_acoes, text="Gerar Relatório PDF", command=self._gerar_pdf_creditos
+        )
+
+    def _montar_aba_apuracao(self, aba) -> None:
+        campos = (
+            (
+                "1 - Relatório de créditos (gerado na aba Verificar Créditos, .xlsx ou .pdf)",
+                "label_creditos_apuracao",
+                self._on_drop_creditos_apuracao,
+                self._selecionar_creditos_apuracao,
+            ),
+            (
+                "2 - Planilha de antecipação: Lista de notas fiscais/itens (PDF, 1 ou mais)",
+                "label_antecipacao_apuracao",
+                self._on_drop_antecipacao_apuracao,
+                self._selecionar_antecipacao_apuracao,
+            ),
+            (
+                "3 - Planilha de DAEs com 'Informações de Pagamento (DAE)' (.xlsx)",
+                "label_daes_apuracao",
+                self._on_drop_daes_apuracao,
+                self._selecionar_daes_apuracao,
+            ),
+        )
+        for texto, atributo, ao_soltar, ao_selecionar in campos:
+            frame = ctk.CTkFrame(aba)
+            frame.pack(fill="x", padx=8, pady=(8, 0))
+            ctk.CTkLabel(frame, text=texto).pack(anchor="w", padx=8, pady=(6, 0))
+            linha = ctk.CTkFrame(frame, fg_color="transparent")
+            linha.pack(fill="x", padx=8, pady=6)
+            ctk.CTkButton(linha, text="Selecionar", width=100, command=ao_selecionar).pack(side="left")
+            rotulo = ctk.CTkLabel(linha, text="Nenhum arquivo — solte aqui ou selecione", anchor="w")
+            rotulo.pack(side="left", fill="x", expand=True, padx=(8, 0))
+            rotulo.drop_target_register(DND_FILES)
+            rotulo.dnd_bind("<<Drop>>", ao_soltar)
+            setattr(self, atributo, rotulo)
+
+        frame_acoes = ctk.CTkFrame(aba, fg_color="transparent")
+        frame_acoes.pack(fill="x", padx=8, pady=8)
+
+        self.botao_analisar_apuracao = ctk.CTkButton(
+            frame_acoes,
+            text="Analisar Apuração",
+            command=self._analisar_apuracao,
+            state="disabled",
+        )
+        self.botao_analisar_apuracao.pack(side="left")
+
+        # Só aparecem (pack) depois de "Analisar Apuração" concluir com sucesso.
+        self.botao_gerar_excel_apuracao = ctk.CTkButton(
+            frame_acoes, text="Gerar Relatório Excel", command=self._gerar_excel_apuracao
+        )
+        self.botao_gerar_pdf_apuracao = ctk.CTkButton(
+            frame_acoes, text="Gerar Relatório PDF", command=self._gerar_pdf_apuracao
         )
 
     def _on_drop_dae(self, evento) -> None:
@@ -1423,6 +1535,214 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
             "notas_nao_encontradas_em_dae",
             gerar_relatorio_nao_encontradas_pdf,
         )
+
+    def _on_drop_pdfs_creditos(self, evento) -> None:
+        caminhos = [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(".pdf")]
+        self._adicionar_pdfs_creditos(caminhos)
+
+    def _selecionar_pdfs_creditos(self) -> None:
+        caminhos = filedialog.askopenfilenames(
+            title="Selecionar Lista(s) de Notas Fiscais/Itens", filetypes=[("PDF", "*.pdf")]
+        )
+        self._adicionar_pdfs_creditos(list(caminhos))
+
+    def _adicionar_pdfs_creditos(self, caminhos: list[str]) -> None:
+        if not caminhos:
+            return
+        self.caminhos_lista_creditos.extend(caminhos)
+        self.lista_pdfs_creditos.delete("1.0", "end")
+        self.lista_pdfs_creditos.insert("1.0", "\n".join(self.caminhos_lista_creditos))
+        self.botao_verificar_creditos.configure(state="normal")
+
+    def _verificar_creditos(self) -> None:
+        if not self.caminhos_lista_creditos:
+            messagebox.showwarning("AuditaDAE", "Selecione ao menos uma lista de notas fiscais/itens.")
+            return
+
+        self.botao_verificar_creditos.configure(state="disabled")
+        self.barra_progresso.start()
+        threading.Thread(target=self._verificar_creditos_em_background, daemon=True).start()
+
+    def _verificar_creditos_em_background(self) -> None:
+        try:
+            resultado = verificar_creditos_lote(self.caminhos_lista_creditos)
+            self.after(0, self._verificar_creditos_concluido, resultado, None)
+        except Exception as erro:
+            self.after(0, self._verificar_creditos_concluido, None, erro)
+
+    def _verificar_creditos_concluido(
+        self, resultado: tuple[list[NotaCredito], int, int] | None, erro: Exception | None
+    ) -> None:
+        self.barra_progresso.stop()
+        self.botao_verificar_creditos.configure(state="normal")
+        if erro is not None:
+            messagebox.showerror("AuditaDAE", f"Falha ao verificar créditos: {erro}")
+            return
+
+        notas, itens_lidos, itens_excluidos = resultado
+        self.ultimas_notas_creditos = notas
+        self.botao_gerar_excel_creditos.pack(side="left", padx=(8, 0))
+        self.botao_gerar_pdf_creditos.pack(side="left", padx=(8, 0))
+
+        messagebox.showinfo(
+            "AuditaDAE",
+            f"Verificação concluída.\n\nItens lidos: {itens_lidos}\n"
+            f"Itens excluídos (calçados, bolsas, mochilas e carteiras): {itens_excluidos}\n"
+            f"Itens considerados: {itens_lidos - itens_excluidos}\nNotas no relatório: {len(notas)}",
+        )
+
+    def _salvar_relatorio_creditos(self, extensao: str, gerador) -> None:
+        if not self.ultimas_notas_creditos:
+            messagebox.showwarning("AuditaDAE", "Nenhuma nota com itens a verificar para incluir no relatório.")
+            return
+
+        tipo = ("Excel", "*.xlsx") if extensao == ".xlsx" else ("PDF", "*.pdf")
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar Relatório de Verificação de Créditos",
+            defaultextension=extensao,
+            filetypes=[tipo],
+            initialfile=f"relatorio_creditos{extensao}",
+        )
+        if not caminho:
+            return
+
+        try:
+            gerador(self.ultimas_notas_creditos, Path(caminho))
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar relatório: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório gerado em:\n{caminho}")
+
+    def _gerar_excel_creditos(self) -> None:
+        self._salvar_relatorio_creditos(".xlsx", gerar_relatorio_creditos_excel)
+
+    def _gerar_pdf_creditos(self) -> None:
+        self._salvar_relatorio_creditos(".pdf", gerar_relatorio_creditos_pdf)
+
+    def _arquivos_soltos(self, evento, extensoes: tuple[str, ...]) -> list[str]:
+        return [c for c in self.tk.splitlist(evento.data) if c.lower().endswith(extensoes)]
+
+    def _on_drop_creditos_apuracao(self, evento) -> None:
+        caminhos = self._arquivos_soltos(evento, (".xlsx", ".pdf"))
+        if caminhos:
+            self._definir_creditos_apuracao(caminhos[0])
+
+    def _selecionar_creditos_apuracao(self) -> None:
+        caminho = filedialog.askopenfilename(
+            title="Selecionar Relatório de Créditos", filetypes=[("Excel ou PDF", "*.xlsx *.pdf")]
+        )
+        if caminho:
+            self._definir_creditos_apuracao(caminho)
+
+    def _definir_creditos_apuracao(self, caminho: str) -> None:
+        self.caminho_creditos_apuracao = caminho
+        self.label_creditos_apuracao.configure(text=caminho)
+        self._atualizar_estado_botao_apuracao()
+
+    def _on_drop_antecipacao_apuracao(self, evento) -> None:
+        self._adicionar_antecipacao_apuracao(self._arquivos_soltos(evento, (".pdf",)))
+
+    def _selecionar_antecipacao_apuracao(self) -> None:
+        caminhos = filedialog.askopenfilenames(
+            title="Selecionar Lista(s) de Notas Fiscais/Itens", filetypes=[("PDF", "*.pdf")]
+        )
+        self._adicionar_antecipacao_apuracao(list(caminhos))
+
+    def _adicionar_antecipacao_apuracao(self, caminhos: list[str]) -> None:
+        if not caminhos:
+            return
+        self.caminhos_antecipacao_apuracao.extend(caminhos)
+        self.label_antecipacao_apuracao.configure(text="; ".join(Path(c).name for c in self.caminhos_antecipacao_apuracao))
+        self._atualizar_estado_botao_apuracao()
+
+    def _on_drop_daes_apuracao(self, evento) -> None:
+        caminhos = self._arquivos_soltos(evento, (".xlsx",))
+        if caminhos:
+            self._definir_daes_apuracao(caminhos[0])
+
+    def _selecionar_daes_apuracao(self) -> None:
+        caminho = filedialog.askopenfilename(title="Selecionar Planilha de DAEs", filetypes=[("Excel", "*.xlsx")])
+        if caminho:
+            self._definir_daes_apuracao(caminho)
+
+    def _definir_daes_apuracao(self, caminho: str) -> None:
+        self.caminho_daes_apuracao = caminho
+        self.label_daes_apuracao.configure(text=caminho)
+        self._atualizar_estado_botao_apuracao()
+
+    def _atualizar_estado_botao_apuracao(self) -> None:
+        habilitado = (
+            self.caminho_creditos_apuracao is not None
+            and bool(self.caminhos_antecipacao_apuracao)
+            and self.caminho_daes_apuracao is not None
+        )
+        self.botao_analisar_apuracao.configure(state="normal" if habilitado else "disabled")
+
+    def _analisar_apuracao(self) -> None:
+        self.botao_analisar_apuracao.configure(state="disabled")
+        self.barra_progresso.start()
+        threading.Thread(target=self._analisar_apuracao_em_background, daemon=True).start()
+
+    def _analisar_apuracao_em_background(self) -> None:
+        try:
+            resultado = analisar_apuracao_lote(
+                self.caminho_creditos_apuracao, self.caminhos_antecipacao_apuracao, self.caminho_daes_apuracao
+            )
+            self.after(0, self._analisar_apuracao_concluido, resultado, None)
+        except Exception as erro:
+            self.after(0, self._analisar_apuracao_concluido, None, erro)
+
+    def _analisar_apuracao_concluido(
+        self, analises: list[AnaliseApuracao] | None, erro: Exception | None
+    ) -> None:
+        self.barra_progresso.stop()
+        self._atualizar_estado_botao_apuracao()
+        if erro is not None:
+            messagebox.showerror("AuditaDAE", f"Falha ao analisar a apuração: {erro}")
+            return
+
+        self.ultimas_analises_apuracao = analises
+        self.botao_gerar_excel_apuracao.pack(side="left", padx=(8, 0))
+        self.botao_gerar_pdf_apuracao.pack(side="left", padx=(8, 0))
+
+        sem_dae = sum(1 for a in analises if INFORMACAO_SEM_DAE in a.informacao_norte)
+        sem_antecipacao = sum(1 for a in analises if a.valor_pago is None)
+        messagebox.showinfo(
+            "AuditaDAE",
+            f"Análise concluída.\n\nNotas analisadas: {len(analises)}\n"
+            f"Não encontradas na planilha de DAEs: {sem_dae}\n"
+            f"Não encontradas na planilha de antecipação: {sem_antecipacao}",
+        )
+
+    def _salvar_relatorio_apuracao(self, extensao: str, gerador) -> None:
+        if not self.ultimas_analises_apuracao:
+            messagebox.showwarning("AuditaDAE", "Nenhuma nota analisada para incluir no relatório.")
+            return
+
+        tipo = ("Excel", "*.xlsx") if extensao == ".xlsx" else ("PDF", "*.pdf")
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar Relatório de Análise da Apuração",
+            defaultextension=extensao,
+            filetypes=[tipo],
+            initialfile=f"relatorio_analise_apuracao{extensao}",
+        )
+        if not caminho:
+            return
+
+        try:
+            gerador(self.ultimas_analises_apuracao, Path(caminho))
+        except Exception as erro:
+            messagebox.showerror("AuditaDAE", f"Falha ao gerar relatório: {erro}")
+            return
+
+        messagebox.showinfo("AuditaDAE", f"Relatório gerado em:\n{caminho}")
+
+    def _gerar_excel_apuracao(self) -> None:
+        self._salvar_relatorio_apuracao(".xlsx", gerar_relatorio_apuracao_excel)
+
+    def _gerar_pdf_apuracao(self) -> None:
+        self._salvar_relatorio_apuracao(".pdf", gerar_relatorio_apuracao_pdf)
 
     def _atualizar_historico(self) -> None:
         conexao = obter_conexao()
