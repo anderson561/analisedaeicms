@@ -4,6 +4,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
+## [1.1.0] - 2026-11-09
+
 ### Adicionado
 - Aba **Analisar Apuração**: cruza relatório de créditos + lista de antecipação + planilha de DAEs; acrescenta às tabelas de notas (sem Data Lançamento e UF) o Valor Pago (Σ VlTotItem × AliqInt − VlCredEmpr) e a Informação Norte do DAE; relatórios Excel/PDF. Suíte: 180 → 194 testes.
 - Aba **Verificar Créditos**: soma VlLiqItem, VlCredEmpr, VlBcAntParc e VlCredAud por nota da lista de notas fiscais/itens, excluindo calçados (NCM 64) e bolsas, mochilas e carteiras (NCM 4202); relatórios Excel/PDF com totais por mês e geral. Suíte: 167 → 180 testes.

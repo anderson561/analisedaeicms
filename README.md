@@ -86,3 +86,5 @@ tests/            # testes unitários (pytest)
 *Documentação atualizada em 26/10/2026 — aba Verificar Créditos e correção da leitura da lista de notas (itens com número de 3 dígitos na descrição).*
 
 *Documentação atualizada em 26/10/2026 — aba Analisar Apuração.*
+
+*Documentação atualizada em 09/11/2026 — versão 1.1.0 publicada (abas Pagamentos Notas, Conciliação vs DAE, Verificar Créditos e Analisar Apuração).*
