@@ -10,7 +10,7 @@ def _construir_planilha_icms_at(caminho, incluir_aba_icms_at: bool = True):
     aba = workbook.active
     aba.title = "ICMS_AT" if incluir_aba_icms_at else "Outra"
 
-    aba.append(["MACEDO COMERCIAL DE CALCADOS LTDA"])
+    aba.append(["EMPRESA EXEMPLO COMERCIO LTDA"])
     aba.append(["RUA QUALQUER, 1241"])
     aba.append(["CNPJ: 04.074.648/0003-25"])
     aba.append([])

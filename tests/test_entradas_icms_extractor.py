@@ -9,7 +9,7 @@ from src.models.dae_models import LinhaEntradaIcms
 def _linha_simples() -> list[str]:
     # Fornecedor curto, sem sobreposição com CFOP/AC./UF -- caso "limpo".
     return [
-        "1082", "04/01/2021", "423", "1", "36", "2", "ROSEMERY", "ALMEIDA", "MACEDO",
+        "1082", "04/01/2021", "423", "1", "36", "2", "FORNECEDOR", "EXEMPLO", "LTDA",
         "1-411", "132", "BA", "679,48", "ICMS", "0,00", "18,00", "0,00", "0,00", "679,48",
     ]
 
@@ -46,7 +46,7 @@ def test_parse_linha_extrai_campos_essenciais():
     # Fornecedor é melhor-esforço (ver docstring do módulo): inclui à direita
     # o que sobrar até o Valor Contábil (aqui, CFOP/AC./UF), já que não
     # tentamos localizar o fim exato do nome.
-    assert resultado.fornecedor.startswith("ROSEMERY ALMEIDA MACEDO")
+    assert resultado.fornecedor.startswith("FORNECEDOR EXEMPLO LTDA")
 
 
 def test_parse_linha_ignora_sub_linha_st_at_sem_data():

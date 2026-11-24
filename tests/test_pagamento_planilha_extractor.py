@@ -11,7 +11,7 @@ def _construir_planilha_pagamento_dae(caminho, com_preambulo: bool):
     aba.title = "Arrecadacao"
 
     if com_preambulo:
-        aba.append(["MACEDO COMERCIAL DE CALCADOS LTDA"])
+        aba.append(["EMPRESA EXEMPLO COMERCIO LTDA"])
         aba.append(["Endereco qualquer"])
         aba.append([])
         aba.append(["Relação de DAEs"])

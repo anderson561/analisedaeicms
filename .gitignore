@@ -223,3 +223,7 @@ vendor/
 *.spec.bak
 *.db
 .claude/scheduled_tasks.lock
+
+# Backups locais do scaffold de agentes (nao versionar)
+agents.bkp/
+claude.bkp/
