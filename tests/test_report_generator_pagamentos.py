@@ -8,7 +8,7 @@ from src.reports.report_generator import gerar_relatorio_pagamentos_excel, gerar
 def test_gerar_relatorio_pagamentos_excel_contem_as_duas_abas_agrupadas_por_ano_e_mes(tmp_path):
     confirmados = [
         PagamentoConfirmado(
-            dae_arquivo_origem="Macedo DAE 1145 09-2022.pdf",
+            dae_arquivo_origem="Cliente DAE 1145 09-2022.pdf",
             linha_pagamento=LinhaPagamentoDae(
                 nosso_numero="2113874976",
                 data_pagamento="25/02/2022",
@@ -22,7 +22,7 @@ def test_gerar_relatorio_pagamentos_excel_contem_as_duas_abas_agrupadas_por_ano_
             ),
         ),
         PagamentoConfirmado(
-            dae_arquivo_origem="Macedo DAE 1145 09-2022 (2).pdf",
+            dae_arquivo_origem="Cliente DAE 1145 09-2022 (2).pdf",
             linha_pagamento=LinhaPagamentoDae(
                 nosso_numero="2113900002",
                 data_pagamento="20/10/2022",
@@ -36,7 +36,7 @@ def test_gerar_relatorio_pagamentos_excel_contem_as_duas_abas_agrupadas_por_ano_
             ),
         ),
         PagamentoConfirmado(
-            dae_arquivo_origem="Macedo DAE 1145 09-2021.pdf",
+            dae_arquivo_origem="Cliente DAE 1145 09-2021.pdf",
             linha_pagamento=LinhaPagamentoDae(
                 nosso_numero="2100000001",
                 data_pagamento="10/02/2021",
@@ -52,19 +52,19 @@ def test_gerar_relatorio_pagamentos_excel_contem_as_duas_abas_agrupadas_por_ano_
     ]
     nao_localizados = [
         DaePagamentoNaoLocalizado(
-            arquivo_origem="Macedo DAE 2175 05-2022.pdf",
+            arquivo_origem="Cliente DAE 2175 05-2022.pdf",
             codigo_receita="2175",
             referencia="05/2022",
             valor_principal=784.01,
         ),
         DaePagamentoNaoLocalizado(
-            arquivo_origem="Macedo DAE 1145 09-2022.pdf",
+            arquivo_origem="Cliente DAE 1145 09-2022.pdf",
             codigo_receita="1145",
             referencia="09/2022",
             valor_principal=999.99,
         ),
         DaePagamentoNaoLocalizado(
-            arquivo_origem="Macedo DAE 2175 05-2021.pdf",
+            arquivo_origem="Cliente DAE 2175 05-2021.pdf",
             codigo_receita="2175",
             referencia="05/2021",
             valor_principal=100.00,
@@ -103,17 +103,17 @@ def test_gerar_relatorio_pagamentos_excel_contem_as_duas_abas_agrupadas_por_ano_
     valores_nao_localizados = [[c.value for c in linha] for linha in aba_nao_localizados.iter_rows()]
     assert valores_nao_localizados[0][0] == "Ano 2021"
     assert valores_nao_localizados[1][0] == "Maio"
-    assert valores_nao_localizados[3][0] == "Macedo DAE 2175 05-2021.pdf"
+    assert valores_nao_localizados[3][0] == "Cliente DAE 2175 05-2021.pdf"
     assert valores_nao_localizados[5][0] == "Ano 2022"
     assert valores_nao_localizados[6][0] == "Maio"
     linha_nao_localizados_2022_05 = valores_nao_localizados[8]
-    assert linha_nao_localizados_2022_05[0] == "Macedo DAE 2175 05-2022.pdf"
+    assert linha_nao_localizados_2022_05[0] == "Cliente DAE 2175 05-2022.pdf"
     assert linha_nao_localizados_2022_05[1] == "2175"
     assert linha_nao_localizados_2022_05[2] == "05/2022"
     assert linha_nao_localizados_2022_05[3] == 784.01
     assert linha_nao_localizados_2022_05[4] == "Não Localizada no Relatório de Pagamentos"
     assert valores_nao_localizados[10][0] == "Setembro"
-    assert valores_nao_localizados[12][0] == "Macedo DAE 1145 09-2022.pdf"
+    assert valores_nao_localizados[12][0] == "Cliente DAE 1145 09-2022.pdf"
 
 
 def test_gerar_relatorio_pagamentos_excel_listas_vazias(tmp_path):
@@ -129,7 +129,7 @@ def test_gerar_relatorio_pagamentos_excel_listas_vazias(tmp_path):
 def test_gerar_relatorio_pagamentos_pdf_contem_as_duas_secoes_agrupadas_por_ano_e_mes(tmp_path):
     confirmados = [
         PagamentoConfirmado(
-            dae_arquivo_origem="Macedo DAE 2175 05-2022.pdf",
+            dae_arquivo_origem="Cliente DAE 2175 05-2022.pdf",
             linha_pagamento=LinhaPagamentoDae(
                 nosso_numero="2117979376",
                 data_pagamento="27/06/2022",
@@ -143,7 +143,7 @@ def test_gerar_relatorio_pagamentos_pdf_contem_as_duas_secoes_agrupadas_por_ano_
             ),
         ),
         PagamentoConfirmado(
-            dae_arquivo_origem="Macedo DAE 1145 09-2022.pdf",
+            dae_arquivo_origem="Cliente DAE 1145 09-2022.pdf",
             linha_pagamento=LinhaPagamentoDae(
                 nosso_numero="2117979999",
                 data_pagamento="20/10/2022",
@@ -157,7 +157,7 @@ def test_gerar_relatorio_pagamentos_pdf_contem_as_duas_secoes_agrupadas_por_ano_
             ),
         ),
         PagamentoConfirmado(
-            dae_arquivo_origem="Macedo DAE 2175 05-2021.pdf",
+            dae_arquivo_origem="Cliente DAE 2175 05-2021.pdf",
             linha_pagamento=LinhaPagamentoDae(
                 nosso_numero="2100000002",
                 data_pagamento="27/06/2021",
@@ -173,13 +173,13 @@ def test_gerar_relatorio_pagamentos_pdf_contem_as_duas_secoes_agrupadas_por_ano_
     ]
     nao_localizados = [
         DaePagamentoNaoLocalizado(
-            arquivo_origem="Macedo DAE 1145 09-2022.pdf",
+            arquivo_origem="Cliente DAE 1145 09-2022.pdf",
             codigo_receita="1145",
             referencia="09/2022",
             valor_principal=4998.63,
         ),
         DaePagamentoNaoLocalizado(
-            arquivo_origem="Macedo DAE 1145 09-2021.pdf",
+            arquivo_origem="Cliente DAE 1145 09-2021.pdf",
             codigo_receita="1145",
             referencia="09/2021",
             valor_principal=1000.00,
@@ -200,7 +200,7 @@ def test_gerar_relatorio_pagamentos_pdf_contem_as_duas_secoes_agrupadas_por_ano_
     assert "2117979376" in texto
     assert "784.01" in texto
     assert "Não Localizados" in texto
-    assert "Macedo DAE 1145 09-2022.pdf" in texto
+    assert "Cliente DAE 1145 09-2022.pdf" in texto
     assert "4998.63" in texto
 
     assert texto.count("Ano 2021") == 2

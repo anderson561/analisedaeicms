@@ -4,6 +4,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 
 ## [Não lançado]
 
+### Adicionado
+- Documentação do projeto em `docs/`: BRD (negócio), FRD (funcional), SRS (especificação de software) e TRD (técnico).
+
+### Corrigido
+- README desatualizado: descrevia só a conciliação de notas, dizia que os relatórios eram dois `.xlsx` salvos automaticamente e trazia um comando de testes que falha fora da venv. Agora lista as 7 abas, os relatórios sob demanda (Excel/PDF) e o comando correto.
+
+### Removido
+- Nomes reais de cliente dos dados de teste (substituídos por nomes fictícios).
+- Pastas de backup `agents.bkp/` e `claude.bkp/` do repositório (continuam apenas localmente, agora no `.gitignore`).
+
 ## [1.1.0] - 2026-11-09
 
 ### Adicionado

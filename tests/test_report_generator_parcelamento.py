@@ -8,7 +8,7 @@ from src.reports.report_generator import gerar_relatorio_parcelamento_excel, ger
 def test_gerar_relatorio_parcelamento_excel_contem_as_duas_abas_agrupadas_por_ano_e_mes(tmp_path):
     encontrados = [
         DaeParceladoEncontrado(
-            dae_arquivo_origem="Macedo DAE 07.02.004 07-2019.pdf",
+            dae_arquivo_origem="Cliente DAE 07.02.004 07-2019.pdf",
             linha_parcelamento=LinhaParcelamento(
                 paf="810000.7810/24-5",
                 arquivo_origem="2022.pdf",
@@ -21,7 +21,7 @@ def test_gerar_relatorio_parcelamento_excel_contem_as_duas_abas_agrupadas_por_an
             ),
         ),
         DaeParceladoEncontrado(
-            dae_arquivo_origem="Macedo DAE 07.02.004 09-2022.pdf",
+            dae_arquivo_origem="Cliente DAE 07.02.004 09-2022.pdf",
             linha_parcelamento=LinhaParcelamento(
                 paf="810000.7810/24-5",
                 arquivo_origem="2022.pdf",
@@ -36,7 +36,7 @@ def test_gerar_relatorio_parcelamento_excel_contem_as_duas_abas_agrupadas_por_an
     ]
     nao_encontrados = [
         DaeParceladoNaoEncontrado(
-            arquivo_origem="Macedo DAE 1145 09-2022.pdf",
+            arquivo_origem="Cliente DAE 1145 09-2022.pdf",
             codigo_receita="1145",
             referencia="09/2022",
             valor_principal=999.99,
@@ -57,7 +57,7 @@ def test_gerar_relatorio_parcelamento_excel_contem_as_duas_abas_agrupadas_por_an
     assert valores_encontrados[0][0] == "Ano 2019"
     assert valores_encontrados[1][0] == "Julho"
     assert valores_encontrados[2][0] == "Arquivo DAE"
-    assert valores_encontrados[3][0] == "Macedo DAE 07.02.004 07-2019.pdf"
+    assert valores_encontrados[3][0] == "Cliente DAE 07.02.004 07-2019.pdf"
     linha_2019 = valores_encontrados[3]
     assert linha_2019[1] == "810000.7810/24-5"
     assert linha_2019[2] == "31/07/2019"
@@ -66,14 +66,14 @@ def test_gerar_relatorio_parcelamento_excel_contem_as_duas_abas_agrupadas_por_an
     assert linha_2019[5] == 1009.63
     assert valores_encontrados[5][0] == "Ano 2022"
     assert valores_encontrados[6][0] == "Setembro"
-    assert valores_encontrados[8][0] == "Macedo DAE 07.02.004 09-2022.pdf"
+    assert valores_encontrados[8][0] == "Cliente DAE 07.02.004 09-2022.pdf"
 
     aba_nao_encontrados = workbook["Não Encontrados"]
     valores_nao_encontrados = [[c.value for c in linha] for linha in aba_nao_encontrados.iter_rows()]
     assert valores_nao_encontrados[0][0] == "Ano 2022"
     assert valores_nao_encontrados[1][0] == "Setembro"
     linha_nao_encontrada = valores_nao_encontrados[3]
-    assert linha_nao_encontrada[0] == "Macedo DAE 1145 09-2022.pdf"
+    assert linha_nao_encontrada[0] == "Cliente DAE 1145 09-2022.pdf"
     assert linha_nao_encontrada[1] == "1145"
     assert linha_nao_encontrada[2] == "09/2022"
     assert linha_nao_encontrada[3] == 999.99
@@ -93,7 +93,7 @@ def test_gerar_relatorio_parcelamento_excel_listas_vazias(tmp_path):
 def test_gerar_relatorio_parcelamento_pdf_contem_as_duas_secoes_agrupadas_por_ano_e_mes(tmp_path):
     encontrados = [
         DaeParceladoEncontrado(
-            dae_arquivo_origem="Macedo DAE 07.02.004 07-2019.pdf",
+            dae_arquivo_origem="Cliente DAE 07.02.004 07-2019.pdf",
             linha_parcelamento=LinhaParcelamento(
                 paf="810000.7810/24-5",
                 arquivo_origem="2022.pdf",
@@ -108,7 +108,7 @@ def test_gerar_relatorio_parcelamento_pdf_contem_as_duas_secoes_agrupadas_por_an
     ]
     nao_encontrados = [
         DaeParceladoNaoEncontrado(
-            arquivo_origem="Macedo DAE 1145 09-2022.pdf",
+            arquivo_origem="Cliente DAE 1145 09-2022.pdf",
             codigo_receita="1145",
             referencia="09/2022",
             valor_principal=999.99,
@@ -126,11 +126,11 @@ def test_gerar_relatorio_parcelamento_pdf_contem_as_duas_secoes_agrupadas_por_an
 
     assert "Relatório de Parcelamento" in texto
     assert "DAEs Encontrados" in texto
-    assert "Macedo DAE 07.02.004 07-2019.pdf" in texto
+    assert "Cliente DAE 07.02.004 07-2019.pdf" in texto
     assert "810000.7810/24-5" in texto
     assert "1009.63" in texto
     assert "DAEs Não Encontrados" in texto
-    assert "Macedo DAE 1145 09-2022.pdf" in texto
+    assert "Cliente DAE 1145 09-2022.pdf" in texto
     assert "999.99" in texto
     assert "Ano 2019" in texto
     assert "Julho" in texto
